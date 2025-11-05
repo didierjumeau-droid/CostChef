@@ -1,0 +1,422 @@
+[
+  {
+    "Id": 1,
+    "Name": "All-purpose Flour",
+    "Unit": "gram",
+    "UnitPrice": 0.3,
+    "Category": ""
+  },
+  {
+    "Id": 2,
+    "Name": "Bacon",
+    "Unit": "gram",
+    "UnitPrice": 0.9,
+    "Category": ""
+  },
+  {
+    "Id": 3,
+    "Name": "Beef Striploin",
+    "Unit": "gram",
+    "UnitPrice": 1.2,
+    "Category": ""
+  },
+  {
+    "Id": 4,
+    "Name": "Black Pepper",
+    "Unit": "gram",
+    "UnitPrice": 1.5,
+    "Category": ""
+  },
+  {
+    "Id": 5,
+    "Name": "Breadcrumbs",
+    "Unit": "gram",
+    "UnitPrice": 0.35,
+    "Category": ""
+  },
+  {
+    "Id": 6,
+    "Name": "Brown Sugar",
+    "Unit": "gram",
+    "UnitPrice": 0.1,
+    "Category": ""
+  },
+  {
+    "Id": 7,
+    "Name": "Butter",
+    "Unit": "gram",
+    "UnitPrice": 1.2,
+    "Category": ""
+  },
+  {
+    "Id": 8,
+    "Name": "Cabbage",
+    "Unit": "gram",
+    "UnitPrice": 0.2,
+    "Category": ""
+  },
+  {
+    "Id": 9,
+    "Name": "Calamansi",
+    "Unit": "piece",
+    "UnitPrice": 2.5,
+    "Category": ""
+  },
+  {
+    "Id": 10,
+    "Name": "Carrot",
+    "Unit": "piece",
+    "UnitPrice": 10,
+    "Category": ""
+  },
+  {
+    "Id": 11,
+    "Name": "Cheddar Cheese",
+    "Unit": "gram",
+    "UnitPrice": 0.9,
+    "Category": ""
+  },
+  {
+    "Id": 12,
+    "Name": "Cheese Sauce",
+    "Unit": "tablespoon",
+    "UnitPrice": 5,
+    "Category": ""
+  },
+  {
+    "Id": 13,
+    "Name": "Chicken Breast",
+    "Unit": "gram",
+    "UnitPrice": 0.32,
+    "Category": ""
+  },
+  {
+    "Id": 14,
+    "Name": "Chicken Stock (house)",
+    "Unit": "ml",
+    "UnitPrice": 0.2,
+    "Category": ""
+  },
+  {
+    "Id": 15,
+    "Name": "Chicken Thigh",
+    "Unit": "gram",
+    "UnitPrice": 0.4,
+    "Category": ""
+  },
+  {
+    "Id": 16,
+    "Name": "Cilantro",
+    "Unit": "gram",
+    "UnitPrice": 1,
+    "Category": ""
+  },
+  {
+    "Id": 17,
+    "Name": "Condensed Milk (can)",
+    "Unit": "can (390 g)",
+    "UnitPrice": 60,
+    "Category": ""
+  },
+  {
+    "Id": 18,
+    "Name": "Cooking Oil",
+    "Unit": "ml",
+    "UnitPrice": 0.12,
+    "Category": ""
+  },
+  {
+    "Id": 19,
+    "Name": "Egg",
+    "Unit": "piece",
+    "UnitPrice": 10,
+    "Category": ""
+  },
+  {
+    "Id": 20,
+    "Name": "Egg Yolk",
+    "Unit": "piece",
+    "UnitPrice": 6.5,
+    "Category": ""
+  },
+  {
+    "Id": 21,
+    "Name": "Evaporated Milk (can)",
+    "Unit": "can (370 ml)",
+    "UnitPrice": 60,
+    "Category": ""
+  },
+  {
+    "Id": 22,
+    "Name": "Fish Sauce (Patis)",
+    "Unit": "tablespoon",
+    "UnitPrice": 1.2,
+    "Category": ""
+  },
+  {
+    "Id": 23,
+    "Name": "French Fries (prepped, frozen)",
+    "Unit": "gram",
+    "UnitPrice": 0.17,
+    "Category": ""
+  },
+  {
+    "Id": 24,
+    "Name": "Fresh Milk",
+    "Unit": "ml",
+    "UnitPrice": 0.12,
+    "Category": ""
+  },
+  {
+    "Id": 25,
+    "Name": "Garlic",
+    "Unit": "clove",
+    "UnitPrice": 2,
+    "Category": ""
+  },
+  {
+    "Id": 26,
+    "Name": "Green Chili",
+    "Unit": "piece",
+    "UnitPrice": 3,
+    "Category": ""
+  },
+  {
+    "Id": 27,
+    "Name": "Ground Beef 80/20",
+    "Unit": "gram",
+    "UnitPrice": 0.5,
+    "Category": ""
+  },
+  {
+    "Id": 28,
+    "Name": "Hamburger Bun",
+    "Unit": "piece",
+    "UnitPrice": 5,
+    "Category": ""
+  },
+  {
+    "Id": 29,
+    "Name": "Jasmine Rice (raw)",
+    "Unit": "gram",
+    "UnitPrice": 0.06,
+    "Category": ""
+  },
+  {
+    "Id": 30,
+    "Name": "Ketchup",
+    "Unit": "tablespoon",
+    "UnitPrice": 1.5,
+    "Category": ""
+  },
+  {
+    "Id": 31,
+    "Name": "Lemon",
+    "Unit": "piece",
+    "UnitPrice": 25,
+    "Category": ""
+  },
+  {
+    "Id": 32,
+    "Name": "Lettuce",
+    "Unit": "leaf",
+    "UnitPrice": 4,
+    "Category": ""
+  },
+  {
+    "Id": 33,
+    "Name": "Mahi-Mahi (Dorado)",
+    "Unit": "gram",
+    "UnitPrice": 0.75,
+    "Category": ""
+  },
+  {
+    "Id": 34,
+    "Name": "Mayonnaise (house)",
+    "Unit": "tablespoon",
+    "UnitPrice": 7,
+    "Category": ""
+  },
+  {
+    "Id": 35,
+    "Name": "Mozzarella",
+    "Unit": "gram",
+    "UnitPrice": 0.652,
+    "Category": ""
+  },
+  {
+    "Id": 36,
+    "Name": "Olive Oil",
+    "Unit": "ml",
+    "UnitPrice": 0.4,
+    "Category": ""
+  },
+  {
+    "Id": 37,
+    "Name": "Onion",
+    "Unit": "piece",
+    "UnitPrice": 10,
+    "Category": ""
+  },
+  {
+    "Id": 38,
+    "Name": "Oyster Sauce",
+    "Unit": "tablespoon",
+    "UnitPrice": 1.8,
+    "Category": ""
+  },
+  {
+    "Id": 39,
+    "Name": "Pancit Canton Noodles",
+    "Unit": "gram",
+    "UnitPrice": 0.2,
+    "Category": ""
+  },
+  {
+    "Id": 40,
+    "Name": "Parmesan",
+    "Unit": "gram",
+    "UnitPrice": 1,
+    "Category": ""
+  },
+  {
+    "Id": 41,
+    "Name": "Pasta Fettuccine",
+    "Unit": "gram",
+    "UnitPrice": 0.13,
+    "Category": ""
+  },
+  {
+    "Id": 42,
+    "Name": "Pasta Spaghetti",
+    "Unit": "gram",
+    "UnitPrice": 0.13,
+    "Category": ""
+  },
+  {
+    "Id": 43,
+    "Name": "Pickles",
+    "Unit": "slice",
+    "UnitPrice": 1.5,
+    "Category": ""
+  },
+  {
+    "Id": 44,
+    "Name": "Pumpkin",
+    "Unit": "gram",
+    "UnitPrice": 0.15,
+    "Category": ""
+  },
+  {
+    "Id": 45,
+    "Name": "Salsa (house)",
+    "Unit": "tablespoon",
+    "UnitPrice": 4,
+    "Category": ""
+  },
+  {
+    "Id": 46,
+    "Name": "Salt",
+    "Unit": "gram",
+    "UnitPrice": 0.03,
+    "Category": ""
+  },
+  {
+    "Id": 47,
+    "Name": "Shrimp (medium)",
+    "Unit": "piece",
+    "UnitPrice": 7,
+    "Category": ""
+  },
+  {
+    "Id": 48,
+    "Name": "Sinigang Mix (Tamarind)",
+    "Unit": "tablespoon",
+    "UnitPrice": 3,
+    "Category": ""
+  },
+  {
+    "Id": 49,
+    "Name": "Soy Sauce",
+    "Unit": "tablespoon",
+    "UnitPrice": 1,
+    "Category": ""
+  },
+  {
+    "Id": 50,
+    "Name": "Spinach",
+    "Unit": "gram",
+    "UnitPrice": 0.6,
+    "Category": ""
+  },
+  {
+    "Id": 51,
+    "Name": "Tempura Flour",
+    "Unit": "gram",
+    "UnitPrice": 0.5,
+    "Category": ""
+  },
+  {
+    "Id": 52,
+    "Name": "Tomato Paste",
+    "Unit": "tablespoon",
+    "UnitPrice": 2,
+    "Category": ""
+  },
+  {
+    "Id": 53,
+    "Name": "Tomato Sauce",
+    "Unit": "ml",
+    "UnitPrice": 0.2,
+    "Category": ""
+  },
+  {
+    "Id": 54,
+    "Name": "Tortilla (8-inch)",
+    "Unit": "piece",
+    "UnitPrice": 12,
+    "Category": ""
+  },
+  {
+    "Id": 55,
+    "Name": "Tortilla Chips",
+    "Unit": "gram",
+    "UnitPrice": 0.4,
+    "Category": ""
+  },
+  {
+    "Id": 56,
+    "Name": "Tuna Loin",
+    "Unit": "gram",
+    "UnitPrice": 0.7,
+    "Category": ""
+  },
+  {
+    "Id": 57,
+    "Name": "Vanilla Extract",
+    "Unit": "teaspoon",
+    "UnitPrice": 10,
+    "Category": ""
+  },
+  {
+    "Id": 58,
+    "Name": "White Sugar",
+    "Unit": "gram",
+    "UnitPrice": 0.08,
+    "Category": ""
+  },
+  {
+    "Id": 59,
+    "Name": "Yellow Mustard",
+    "Unit": "teaspoon",
+    "UnitPrice": 1,
+    "Category": ""
+  },
+  {
+    "Id": 60,
+    "Name": "mushrooms",
+    "Unit": "piece",
+    "UnitPrice": 2.5,
+    "Category": ""
+  }
+]

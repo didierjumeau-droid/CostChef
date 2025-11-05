@@ -1,0 +1,163 @@
+[
+  {
+    "Id": 1,
+    "Name": "Classic Cheeseburger",
+    "Description": "Delicious beef burger with cheese",
+    "BatchYield": 1,
+    "TargetFoodCostPercentage": 0.3,
+    "Ingredients": [
+      {
+        "IngredientId": 27,
+        "Quantity": 150.0
+      },
+      {
+        "IngredientId": 28,
+        "Quantity": 1.0
+      },
+      {
+        "IngredientId": 11,
+        "Quantity": 30.0
+      },
+      {
+        "IngredientId": 32,
+        "Quantity": 2.0
+      },
+      {
+        "IngredientId": 43,
+        "Quantity": 3.0
+      },
+      {
+        "IngredientId": 30,
+        "Quantity": 15.0
+      }
+    ]
+  },
+  {
+    "Id": 2,
+    "Name": "Chicken Adobo",
+    "Description": "Traditional Filipino chicken adobo",
+    "BatchYield": 4,
+    "TargetFoodCostPercentage": 0.25,
+    "Ingredients": [
+      {
+        "IngredientId": 15,
+        "Quantity": 500.0
+      },
+      {
+        "IngredientId": 49,
+        "Quantity": 60.0
+      },
+      {
+        "IngredientId": 22,
+        "Quantity": 30.0
+      },
+      {
+        "IngredientId": 25,
+        "Quantity": 6.0
+      },
+      {
+        "IngredientId": 37,
+        "Quantity": 1.0
+      },
+      {
+        "IngredientId": 4,
+        "Quantity": 5.0
+      }
+    ]
+  },
+  {
+    "Id": 3,
+    "Name": "Caesar Salad",
+    "Description": "Fresh Caesar salad with homemade dressing",
+    "BatchYield": 2,
+    "TargetFoodCostPercentage": 0.35,
+    "Ingredients": [
+      {
+        "IngredientId": 32,
+        "Quantity": 8.0
+      },
+      {
+        "IngredientId": 34,
+        "Quantity": 45.0
+      },
+      {
+        "IngredientId": 40,
+        "Quantity": 20.0
+      },
+      {
+        "IngredientId": 19,
+        "Quantity": 2.0
+      },
+      {
+        "IngredientId": 25,
+        "Quantity": 2.0
+      },
+      {
+        "IngredientId": 4,
+        "Quantity": 2.0
+      }
+    ]
+  },
+  {
+    "Id": 4,
+    "Name": "Shrimp Tempura",
+    "Description": "Crispy Japanese-style shrimp tempura",
+    "BatchYield": 2,
+    "TargetFoodCostPercentage": 0.28,
+    "Ingredients": [
+      {
+        "IngredientId": 47,
+        "Quantity": 8.0
+      },
+      {
+        "IngredientId": 51,
+        "Quantity": 100.0
+      },
+      {
+        "IngredientId": 19,
+        "Quantity": 1.0
+      },
+      {
+        "IngredientId": 18,
+        "Quantity": 500.0
+      },
+      {
+        "IngredientId": 49,
+        "Quantity": 30.0
+      }
+    ]
+  },
+  {
+    "Id": 5,
+    "Name": "Pasta Carbonara",
+    "Description": "Creamy Italian pasta carbonara",
+    "BatchYield": 2,
+    "TargetFoodCostPercentage": 0.32,
+    "Ingredients": [
+      {
+        "IngredientId": 41,
+        "Quantity": 200.0
+      },
+      {
+        "IngredientId": 2,
+        "Quantity": 100.0
+      },
+      {
+        "IngredientId": 19,
+        "Quantity": 2.0
+      },
+      {
+        "IngredientId": 40,
+        "Quantity": 50.0
+      },
+      {
+        "IngredientId": 7,
+        "Quantity": 30.0
+      },
+      {
+        "IngredientId": 4,
+        "Quantity": 3.0
+      }
+    ]
+  }
+]
