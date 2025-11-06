@@ -30,6 +30,9 @@ namespace CostChef
         private Recipe currentRecipe = new Recipe();
         private List<RecipeIngredient> currentIngredients = new List<RecipeIngredient>();
         private List<Recipe> allRecipes = new List<Recipe>();
+        
+        // Currency symbol - will be moved to settings later
+        private string currencySymbol = "₱";
 
         public RecipesForm()
         {
@@ -150,37 +153,39 @@ namespace CostChef
             // Ingredients DataGrid
             this.dataGridViewIngredients.Location = new System.Drawing.Point(12, 105);
             this.dataGridViewIngredients.Size = new System.Drawing.Size(776, 200);
-            this.dataGridViewIngredients.ReadOnly = true;
+            this.dataGridViewIngredients.ReadOnly = false; // Changed to allow editing
             this.dataGridViewIngredients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.dataGridViewIngredients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            this.dataGridViewIngredients.CellEndEdit += new DataGridViewCellEventHandler(this.dataGridViewIngredients_CellEndEdit);
 
-            // Cost Summary
+            // Cost Summary - FIXED: Made taller to show all calculation text
             this.lblCostSummary.Location = new System.Drawing.Point(12, 315);
-            this.lblCostSummary.Size = new System.Drawing.Size(776, 40);
+            this.lblCostSummary.Size = new System.Drawing.Size(776, 100); // Changed from 40 to 100
             this.lblCostSummary.Text = "Add ingredients to calculate cost...";
-            this.lblCostSummary.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.lblCostSummary.TextAlign = System.Drawing.ContentAlignment.TopCenter; // Changed to TopCenter
             this.lblCostSummary.BorderStyle = BorderStyle.FixedSingle;
+            this.lblCostSummary.Font = new System.Drawing.Font("Consolas", 9); // Monospace for better formatting
 
-            // Calculate Button
-            this.btnCalculate.Location = new System.Drawing.Point(12, 370);
+            // Calculate Button - Moved down to accommodate taller label
+            this.btnCalculate.Location = new System.Drawing.Point(12, 430); // Changed from 370 to 430
             this.btnCalculate.Size = new System.Drawing.Size(100, 30);
             this.btnCalculate.Text = "Calculate";
             this.btnCalculate.Click += (s, e) => CalculateCost();
 
-            // Save Recipe Button
-            this.btnSaveRecipe.Location = new System.Drawing.Point(122, 370);
+            // Save Recipe Button - Moved down
+            this.btnSaveRecipe.Location = new System.Drawing.Point(122, 430); // Changed from 370 to 430
             this.btnSaveRecipe.Size = new System.Drawing.Size(100, 30);
             this.btnSaveRecipe.Text = "Save Recipe";
             this.btnSaveRecipe.Click += (s, e) => SaveRecipe();
 
-            // Delete Recipe Button
-            this.btnDeleteRecipe.Location = new System.Drawing.Point(232, 370);
+            // Delete Recipe Button - Moved down
+            this.btnDeleteRecipe.Location = new System.Drawing.Point(232, 430); // Changed from 370 to 430
             this.btnDeleteRecipe.Size = new System.Drawing.Size(100, 30);
             this.btnDeleteRecipe.Text = "Delete Recipe";
             this.btnDeleteRecipe.Click += (s, e) => DeleteRecipe();
 
-            // Close Button
-            this.btnClose.Location = new System.Drawing.Point(688, 370);
+            // Close Button - Moved down
+            this.btnClose.Location = new System.Drawing.Point(688, 430); // Changed from 370 to 430
             this.btnClose.Size = new System.Drawing.Size(100, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
@@ -198,37 +203,142 @@ namespace CostChef
             this.PerformLayout();
         }
 
+        private void dataGridViewIngredients_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            // Only handle edits to the Quantity column
+            if (e.ColumnIndex == GetColumnIndex("Quantity") && e.RowIndex >= 0)
+            {
+                UpdateIngredientQuantity(e.RowIndex);
+            }
+        }
+
+        private int GetColumnIndex(string columnName)
+        {
+            foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
+            {
+                if (column.HeaderText == columnName)
+                    return column.Index;
+            }
+            return -1;
+        }
+
+        private void UpdateIngredientQuantity(int rowIndex)
+        {
+            if (rowIndex < currentIngredients.Count)
+            {
+                var row = dataGridViewIngredients.Rows[rowIndex];
+                var ingredient = currentIngredients[rowIndex];
+                
+                if (row.Cells["Quantity"].Value != null && 
+                    decimal.TryParse(row.Cells["Quantity"].Value.ToString(), out decimal newQuantity))
+                {
+                    ingredient.Quantity = newQuantity;
+                    RefreshIngredientsGrid();
+                    CalculateCost();
+                }
+            }
+        }
+
         private void LoadExistingRecipes()
         {
-            allRecipes = DatabaseContext.GetAllRecipes();
-            cmbExistingRecipes.DataSource = allRecipes;
-            cmbExistingRecipes.DisplayMember = "Name";
-            cmbExistingRecipes.ValueMember = "Id";
+            try
+            {
+                allRecipes = DatabaseContext.GetAllRecipes();
+                
+                // Clear and rebind the ComboBox to ensure proper display
+                cmbExistingRecipes.DataSource = null;
+                cmbExistingRecipes.Items.Clear();
+                
+                if (allRecipes != null && allRecipes.Count > 0)
+                {
+                    // Create a new list to ensure proper binding
+                    var displayRecipes = allRecipes.Where(r => !string.IsNullOrEmpty(r.Name)).ToList();
+                    
+                    if (displayRecipes.Count > 0)
+                    {
+                        cmbExistingRecipes.DataSource = displayRecipes;
+                        cmbExistingRecipes.DisplayMember = "Name";
+                        cmbExistingRecipes.ValueMember = "Id";
+                    }
+                    else
+                    {
+                        cmbExistingRecipes.Text = "No recipes available";
+                    }
+                }
+                else
+                {
+                    cmbExistingRecipes.Text = "No recipes available";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading recipes: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                cmbExistingRecipes.Text = "Error loading recipes";
+            }
         }
 
         private void LoadSelectedRecipe()
         {
-            if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
+            try
             {
-                currentRecipe = selectedRecipe;
-                currentIngredients = selectedRecipe.Ingredients;
+                if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
+                {
+                    currentRecipe = selectedRecipe;
+                    currentIngredients = selectedRecipe.Ingredients ?? new List<RecipeIngredient>();
 
-                // Update UI
-                txtRecipeName.Text = currentRecipe.Name;
-                txtBatchYield.Text = currentRecipe.BatchYield.ToString();
-                cmbFoodCost.SelectedItem = $"{currentRecipe.TargetFoodCostPercentage * 100}%";
-                
-                RefreshIngredientsGrid();
-                CalculateCost();
+                    // Update UI
+                    txtRecipeName.Text = currentRecipe.Name ?? "Unnamed Recipe";
+                    txtBatchYield.Text = currentRecipe.BatchYield.ToString();
+                    
+                    // Set food cost percentage
+                    var foodCostPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("0");
+                    var matchingItem = cmbFoodCost.Items.Cast<string>()
+                        .FirstOrDefault(item => item.Replace("%", "") == foodCostPercent);
+                    
+                    if (matchingItem != null)
+                        cmbFoodCost.SelectedItem = matchingItem;
+                    
+                    RefreshIngredientsGrid();
+                    CalculateCost();
+                    
+                    MessageBox.Show($"Loaded recipe: {currentRecipe.Name}", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("Please select a valid recipe to load.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading recipe: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void LoadIngredientsComboBox()
         {
-            var ingredients = DatabaseContext.GetAllIngredients();
-            cmbIngredients.DataSource = ingredients;
-            cmbIngredients.DisplayMember = "Name";
-            cmbIngredients.ValueMember = "Id";
+            try
+            {
+                var ingredients = DatabaseContext.GetAllIngredients();
+                if (ingredients != null && ingredients.Count > 0)
+                {
+                    cmbIngredients.DataSource = ingredients;
+                    cmbIngredients.DisplayMember = "Name";
+                    cmbIngredients.ValueMember = "Id";
+                }
+                else
+                {
+                    cmbIngredients.Text = "No ingredients available";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void InitializeNewRecipe()
@@ -283,13 +393,21 @@ namespace CostChef
 
         private void RefreshIngredientsGrid()
         {
+            dataGridViewIngredients.DataSource = null;
             dataGridViewIngredients.DataSource = currentIngredients.ToList();
             
             if (dataGridViewIngredients.Columns.Count > 0)
             {
-                dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = "C2";
-                dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = "C4";
+                // Format currency with peso symbol instead of default currency
+                dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol}0.00";
+                dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol}0.0000";
                 dataGridViewIngredients.Columns["IngredientId"].Visible = false;
+                
+                // Make only Quantity column editable
+                foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
+                {
+                    column.ReadOnly = (column.HeaderText != "Quantity");
+                }
             }
         }
 
@@ -311,9 +429,9 @@ namespace CostChef
             decimal targetPrice = Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5;
 
             string summary = $@"Recipe: {currentRecipe.Name}
-Total Cost: ₱{totalCost:F2} | Cost per Serving: ₱{costPerServing:F2}
-Suggested Prices: 25%: ₱{suggestedPrice25} | 30%: ₱{suggestedPrice30} | 35%: ₱{suggestedPrice35}
-Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): ₱{targetPrice}";
+Total Cost: {currencySymbol}{totalCost:F2} | Cost per Serving: {currencySymbol}{costPerServing:F2}
+Suggested Prices: 25%: {currencySymbol}{suggestedPrice25} | 30%: {currencySymbol}{suggestedPrice30} | 35%: {currencySymbol}{suggestedPrice35}
+Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{targetPrice}";
 
             lblCostSummary.Text = summary;
         }
@@ -337,22 +455,31 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): ₱{targetPrice}";
             // Set the ingredients for the current recipe
             currentRecipe.Ingredients = currentIngredients;
 
-            if (currentRecipe.Id == 0)
+            try
             {
-                // New recipe
-                currentRecipe.Id = DatabaseContext.InsertRecipe(currentRecipe);
-                MessageBox.Show($"Recipe '{currentRecipe.Name}' saved successfully!", "Success", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                
-                // Reload recipes list
-                LoadExistingRecipes();
+                if (currentRecipe.Id == 0)
+                {
+                    // New recipe
+                    currentRecipe.Id = DatabaseContext.InsertRecipe(currentRecipe);
+                    MessageBox.Show($"Recipe '{currentRecipe.Name}' saved successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    
+                    // Reload recipes list
+                    LoadExistingRecipes();
+                }
+                else
+                {
+                    // Update existing recipe
+                    DatabaseContext.UpdateRecipe(currentRecipe);
+                    MessageBox.Show($"Recipe '{currentRecipe.Name}' updated successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // Update existing recipe
-                DatabaseContext.UpdateRecipe(currentRecipe);
-                MessageBox.Show($"Recipe '{currentRecipe.Name}' updated successfully!", "Success", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
             // Optionally: Initialize a new recipe for next entry
@@ -373,13 +500,21 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): ₱{targetPrice}";
 
             if (result == DialogResult.Yes)
             {
-                DatabaseContext.DeleteRecipe(currentRecipe.Id);
-                MessageBox.Show("Recipe deleted successfully!", "Success", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                
-                // Reload recipes and initialize new recipe
-                LoadExistingRecipes();
-                InitializeNewRecipe();
+                try
+                {
+                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
+                    MessageBox.Show("Recipe deleted successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    
+                    // Reload recipes and initialize new recipe
+                    LoadExistingRecipes();
+                    InitializeNewRecipe();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting recipe: {ex.Message}", "Error", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }

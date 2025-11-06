@@ -3,366 +3,325 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using System.Text.Json;
 using CsvHelper;
 using CsvHelper.Configuration;
 
 namespace CostChef
 {
-    public static class ImportExportService
+    public class ImportExportService
     {
-        public static void ExportRecipeToCsv(Recipe recipe, string filePath)
+        private readonly JsonSerializerOptions _jsonOptions;
+        private string currencySymbol = "₱";
+
+        public ImportExportService()
+        {
+            _jsonOptions = new JsonSerializerOptions 
+            { 
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+        }
+
+        // CSV Export Methods
+        public bool ExportIngredientsToCsv(List<Ingredient> ingredients, string filePath)
         {
             try
             {
-                using var writer = new StreamWriter(filePath);
-                using var csv = new CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture);
-
-                // Write recipe header
-                csv.WriteField("Recipe:");
-                csv.WriteField(recipe.Name);
-                csv.NextRecord();
-
-                // Write batch yield
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Batch yield (servings)");
-                csv.WriteField(recipe.BatchYield);
-                csv.NextRecord();
-
-                // Write target food cost
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Target Food Cost %");
-                csv.WriteField(recipe.TargetFoodCostPercentage);
-                csv.NextRecord();
-
-                // Write loss percentage
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Loss %");
-                csv.WriteField("0");
-                csv.NextRecord();
-
-                // Write ingredients header
-                csv.WriteField("Line");
-                csv.WriteField("Ingredient");
-                csv.WriteField("Unit");
-                csv.WriteField("Qty");
-                csv.WriteField("Cost/Unit (?)");
-                csv.WriteField("Line Cost (?)");
-                csv.NextRecord();
-
-                // Write ingredients
-                int lineNumber = 1;
-                decimal totalCost = 0;
-
-                foreach (var ingredient in recipe.Ingredients)
+                using (var writer = new StreamWriter(filePath))
+                using (var csv = new CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture))
                 {
-                    var dbIngredient = DatabaseContext.GetAllIngredients()
-                        .FirstOrDefault(i => i.Id == ingredient.IngredientId);
+                    csv.WriteField("Name");
+                    csv.WriteField("Unit");
+                    csv.WriteField("Price");
+                    csv.WriteField("Category");
+                    csv.NextRecord();
 
-                    if (dbIngredient != null)
+                    foreach (var ingredient in ingredients)
                     {
-                        decimal lineCost = ingredient.Quantity * dbIngredient.UnitPrice;
-                        totalCost += lineCost;
-
-                        csv.WriteField(lineNumber);
-                        csv.WriteField(dbIngredient.Name);
-                        csv.WriteField(dbIngredient.Unit);
-                        csv.WriteField(ingredient.Quantity);
-                        csv.WriteField(dbIngredient.UnitPrice);
-                        csv.WriteField(lineCost);
+                        csv.WriteField(ingredient.Name);
+                        csv.WriteField(ingredient.Unit);
+                        csv.WriteField(ingredient.UnitPrice);
+                        csv.WriteField(ingredient.Category ?? "");
                         csv.NextRecord();
-                        lineNumber++;
                     }
                 }
-
-                // Fill remaining lines up to 20
-                for (int i = lineNumber; i <= 20; i++)
-                {
-                    csv.WriteField(i);
-                    csv.NextRecord();
-                }
-
-                // Write cost summary
-                decimal costPerServing = totalCost / recipe.BatchYield;
-                decimal suggestedPrice = Math.Round((costPerServing / recipe.TargetFoodCostPercentage) / 5, 0) * 5;
-                decimal price25 = Math.Round((costPerServing / 0.25m) / 5, 0) * 5;
-                decimal price30 = Math.Round((costPerServing / 0.30m) / 5, 0) * 5;
-                decimal price35 = Math.Round((costPerServing / 0.35m) / 5, 0) * 5;
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Total Batch Cost (?)");
-                csv.WriteField(totalCost);
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Cost per Serving (?)");
-                csv.WriteField(costPerServing);
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Suggested Price @FoodCost");
-                csv.WriteField(suggestedPrice);
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Suggested Price @25%");
-                csv.WriteField(price25);
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Suggested Price @30%");
-                csv.WriteField(price30);
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Suggested Price @35%");
-                csv.WriteField(price35);
-                csv.NextRecord();
-
-                // Write description section
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("Description / Steps");
-                csv.NextRecord();
-
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("");
-                csv.WriteField("— Write the method here —");
-                csv.NextRecord();
-
-                // Write ingredient list for reference
-                csv.WriteField("ING_LIST_AUTO");
-                csv.NextRecord();
-
-                var allIngredients = DatabaseContext.GetAllIngredients();
-                foreach (var ing in allIngredients)
-                {
-                    csv.WriteField(ing.Name);
-                    csv.NextRecord();
-                }
-
-                MessageBox.Show($"Recipe exported successfully to {filePath}", "Export Successful", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error exporting recipe: {ex.Message}", "Export Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        public static Recipe ImportRecipeFromCsv(string filePath)
-        {
-            try
-            {
-                using var reader = new StreamReader(filePath);
-                using var csv = new CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture);
-
-                var recipe = new Recipe();
-                var ingredients = new List<RecipeIngredient>();
-
-                // Read recipe name (first row, second column)
-                if (csv.Read())
-                {
-                    csv.Read(); // Skip first column
-                    recipe.Name = csv.GetField(1) ?? "Imported Recipe";
-                }
-
-                // Read batch yield (second row, eighth column)
-                if (csv.Read())
-                {
-                    for (int i = 0; i < 6; i++) csv.Read(); // Skip to column H
-                    if (int.TryParse(csv.GetField(7), out int yield))
-                        recipe.BatchYield = yield;
-                }
-
-                // Read target food cost (third row, eighth column)
-                if (csv.Read())
-                {
-                    for (int i = 0; i < 6; i++) csv.Read(); // Skip to column H
-                    if (decimal.TryParse(csv.GetField(7), out decimal foodCost))
-                        recipe.TargetFoodCostPercentage = foodCost;
-                }
-
-                // Skip loss percentage row
-                csv.Read();
-
-                // Skip ingredients header
-                csv.Read();
-
-                // Read ingredients until empty line
-                while (csv.Read())
-                {
-                    var lineField = csv.GetField(0);
-                    if (string.IsNullOrEmpty(lineField) || !int.TryParse(lineField, out _))
-                        break;
-
-                    var ingredientName = csv.GetField(1);
-                    var unit = csv.GetField(2);
-                    var quantityStr = csv.GetField(3);
-
-                    if (!string.IsNullOrEmpty(ingredientName) && decimal.TryParse(quantityStr, out decimal quantity))
-                    {
-                        // Find or create ingredient
-                        var ingredient = DatabaseContext.GetIngredientByName(ingredientName);
-                        if (ingredient == null)
-                        {
-                            // Create new ingredient
-                            ingredient = new Ingredient 
-                            { 
-                                Name = ingredientName, 
-                                Unit = unit,
-                                UnitPrice = 0 // Default price, can be updated later
-                            };
-                            DatabaseContext.InsertIngredient(ingredient);
-                        }
-
-                        ingredients.Add(new RecipeIngredient
-                        {
-                            IngredientId = ingredient.Id,
-                            Quantity = quantity
-                        });
-                    }
-                }
-
-                recipe.Ingredients = ingredients;
-                return recipe;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error importing recipe: {ex.Message}", "Import Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return null;
-            }
-        }
-
-        public static void ExportIngredientsToCsv(string filePath)
-        {
-            try
-            {
-                var ingredients = DatabaseContext.GetAllIngredients();
-                
-                using var writer = new StreamWriter(filePath);
-                using var csv = new CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture);
-
-                // Write header
-                csv.WriteField("Name");
-                csv.WriteField("Unit");
-                csv.WriteField("UnitPrice");
-                csv.WriteField("Category");
-                csv.NextRecord();
-
-                foreach (var ingredient in ingredients)
-                {
-                    csv.WriteField(ingredient.Name);
-                    csv.WriteField(ingredient.Unit);
-                    csv.WriteField(ingredient.UnitPrice);
-                    csv.WriteField(ingredient.Category);
-                    csv.NextRecord();
-                }
-
-                MessageBox.Show($"Ingredients exported successfully to {filePath}", "Export Successful", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error exporting ingredients: {ex.Message}", "Export Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
-        public static void ImportIngredientsFromCsv(string filePath)
+        public bool ExportRecipeToCsv(Recipe recipe, string filePath)
         {
             try
             {
-                using var reader = new StreamReader(filePath);
-                using var csv = new CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture);
-
-                // Skip header
-                csv.Read();
-
-                int importedCount = 0;
-                int updatedCount = 0;
-
-                while (csv.Read())
+                using (var writer = new StreamWriter(filePath))
+                using (var csv = new CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture))
                 {
-                    var name = csv.GetField(0);
-                    var unit = csv.GetField(1);
-                    var unitPriceStr = csv.GetField(2);
-                    var category = csv.GetField(3);
+                    // Recipe header
+                    csv.WriteField("Recipe");
+                    csv.WriteField(recipe.Name);
+                    csv.NextRecord();
 
-                    if (!string.IsNullOrEmpty(name) && decimal.TryParse(unitPriceStr, out decimal unitPrice))
+                    csv.WriteField("Batch Yield");
+                    csv.WriteField(recipe.BatchYield);
+                    csv.NextRecord();
+
+                    csv.WriteField("Target Food Cost %");
+                    csv.WriteField(recipe.TargetFoodCostPercentage * 100);
+                    csv.NextRecord();
+
+                    // Empty line
+                    csv.NextRecord();
+
+                    // Ingredients header
+                    csv.WriteField("Line");
+                    csv.WriteField("Ingredient");
+                    csv.WriteField("Unit");
+                    csv.WriteField("Quantity");
+                    csv.WriteField($"Cost/Unit ({currencySymbol})");
+                    csv.WriteField($"Line Cost ({currencySymbol})");
+                    csv.NextRecord();
+
+                    // Ingredients
+                    if (recipe.Ingredients != null)
                     {
-                        var existingIngredient = DatabaseContext.GetIngredientByName(name);
-                        
-                        if (existingIngredient != null)
+                        int lineNumber = 1;
+                        foreach (var ingredient in recipe.Ingredients)
                         {
-                            // Update existing ingredient
-                            existingIngredient.Unit = unit;
-                            existingIngredient.UnitPrice = unitPrice;
-                            existingIngredient.Category = category;
-                            DatabaseContext.UpdateIngredient(existingIngredient);
-                            updatedCount++;
+                            csv.WriteField(lineNumber);
+                            csv.WriteField(ingredient.IngredientName);
+                            csv.WriteField(ingredient.Unit);
+                            csv.WriteField(ingredient.Quantity);
+                            csv.WriteField(ingredient.UnitPrice);
+                            csv.WriteField(ingredient.LineCost);
+                            csv.NextRecord();
+                            lineNumber++;
                         }
-                        else
+                    }
+
+                    // Cost summary
+                    csv.NextRecord();
+                    decimal totalCost = recipe.Ingredients?.Sum(i => i.LineCost) ?? 0;
+                    decimal costPerServing = totalCost / recipe.BatchYield;
+
+                    csv.WriteField("Total Batch Cost");
+                    csv.WriteField($"{currencySymbol}{totalCost:F2}");
+                    csv.NextRecord();
+
+                    csv.WriteField("Cost per Serving");
+                    csv.WriteField($"{currencySymbol}{costPerServing:F2}");
+                    csv.NextRecord();
+
+                    // Suggested prices
+                    decimal suggestedPrice25 = Math.Round((costPerServing / 0.25m) / 5, 0) * 5;
+                    decimal suggestedPrice30 = Math.Round((costPerServing / 0.30m) / 5, 0) * 5;
+                    decimal suggestedPrice35 = Math.Round((costPerServing / 0.35m) / 5, 0) * 5;
+                    decimal targetPrice = Math.Round((costPerServing / recipe.TargetFoodCostPercentage) / 5, 0) * 5;
+
+                    csv.WriteField($"Suggested Price @25%");
+                    csv.WriteField($"{currencySymbol}{suggestedPrice25}");
+                    csv.NextRecord();
+
+                    csv.WriteField($"Suggested Price @30%");
+                    csv.WriteField($"{currencySymbol}{suggestedPrice30}");
+                    csv.NextRecord();
+
+                    csv.WriteField($"Suggested Price @35%");
+                    csv.WriteField($"{currencySymbol}{suggestedPrice35}");
+                    csv.NextRecord();
+
+                    csv.WriteField($"Target Price @{recipe.TargetFoodCostPercentage:P0}");
+                    csv.WriteField($"{currencySymbol}{targetPrice}");
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting recipe: {ex.Message}", "Export Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        // CSV Import Methods
+        public List<Ingredient> ImportIngredientsFromCsv(string filePath)
+        {
+            var ingredients = new List<Ingredient>();
+            
+            try
+            {
+                using (var reader = new StreamReader(filePath))
+                using (var csv = new CsvReader(reader, System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    csv.Read();
+                    csv.ReadHeader();
+
+                    while (csv.Read())
+                    {
+                        try
                         {
-                            // Create new ingredient
-                            var newIngredient = new Ingredient
+                            var ingredient = new Ingredient
                             {
-                                Name = name,
-                                Unit = unit,
-                                UnitPrice = unitPrice,
-                                Category = category
+                                Name = csv.GetField("Name") ?? "",
+                                Unit = csv.GetField("Unit") ?? "",
+                               UnitPrice = (decimal)csv.GetField<double>("Price"),
+                                Category = csv.GetField("Category") ?? ""
                             };
-                            DatabaseContext.InsertIngredient(newIngredient);
-                            importedCount++;
+
+                            if (!string.IsNullOrEmpty(ingredient.Name))
+                            {
+                                ingredients.Add(ingredient);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error parsing ingredient row: {ex.Message}");
                         }
                     }
                 }
-
-                MessageBox.Show($"Ingredients import completed:\n{importedCount} new ingredients imported\n{updatedCount} existing ingredients updated", 
-                    "Import Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error importing ingredients: {ex.Message}", "Import Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            
+            return ingredients;
+        }
+
+        public List<Recipe> ImportRecipeFromCsv(string filePath)
+        {
+            var recipes = new List<Recipe>();
+            Recipe currentRecipe = null;
+            
+            try
+            {
+                var lines = File.ReadAllLines(filePath);
+                
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+                    var fields = line.Split(',');
+                    
+                    // Look for recipe header
+                    if (fields.Length > 1 && fields[0].Trim() == "Recipe")
+                    {
+                        // Save previous recipe if exists
+                        if (currentRecipe != null)
+                        {
+                            recipes.Add(currentRecipe);
+                        }
+                        
+                        // Create new recipe
+                        currentRecipe = new Recipe
+                        {
+                            Name = fields[1].Trim(),
+                            BatchYield = 1,
+                            TargetFoodCostPercentage = 0.3m,
+                            Ingredients = new List<RecipeIngredient>()
+                        };
+                    }
+                    
+                    // Look for batch yield
+                    if (currentRecipe != null && fields.Length > 1 && fields[0].Trim() == "Batch Yield")
+                    {
+                        if (int.TryParse(fields[1].Trim(), out int yield))
+                        {
+                            currentRecipe.BatchYield = yield;
+                        }
+                    }
+                    
+                    // Look for food cost percentage
+                    if (currentRecipe != null && fields.Length > 1 && fields[0].Trim() == "Target Food Cost %")
+                    {
+                        if (decimal.TryParse(fields[1].Trim(), out decimal foodCostPercent))
+                        {
+                            currentRecipe.TargetFoodCostPercentage = foodCostPercent / 100m;
+                        }
+                    }
+                    
+                    // Look for ingredient lines (they start with numbers)
+                    if (currentRecipe != null && fields.Length > 1 && 
+                        int.TryParse(fields[0].Trim(), out int lineNumber))
+                    {
+                        var ingredient = new RecipeIngredient
+                        {
+                            IngredientName = fields[1]?.Trim() ?? "",
+                            Unit = fields[2]?.Trim() ?? "",
+                            Quantity = decimal.TryParse(fields[3], out decimal qty) ? qty : 0,
+                            UnitPrice = decimal.TryParse(fields[4], out decimal price) ? price : 0
+                        };
+                        
+                        currentRecipe.Ingredients.Add(ingredient);
+                    }
+                }
+                
+                // Add the last recipe
+                if (currentRecipe != null)
+                {
+                    recipes.Add(currentRecipe);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error importing recipes: {ex.Message}", "Import Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            
+            return recipes;
+        }
+
+        // JSON Methods (existing)
+        public bool ExportRecipesToJson(object recipes, string filePath = "recipes.json")
+        {
+            try
+            {
+                string jsonString = JsonSerializer.Serialize(recipes, _jsonOptions);
+                File.WriteAllText(filePath, jsonString);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting recipes: {ex.Message}", "Export Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        public bool ExportIngredientsToJson(object ingredients, string filePath = "ingredients.json")
+        {
+            try
+            {
+                string jsonString = JsonSerializer.Serialize(ingredients, _jsonOptions);
+                File.WriteAllText(filePath, jsonString);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting ingredients: {ex.Message}", "Export Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+        }
+
+        public T ImportFromJson<T>(string filePath)
+        {
+            try
+            {
+                string jsonString = File.ReadAllText(filePath);
+                return JsonSerializer.Deserialize<T>(jsonString, _jsonOptions);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error importing from {filePath}: {ex.Message}", "Import Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return default(T);
             }
         }
     }

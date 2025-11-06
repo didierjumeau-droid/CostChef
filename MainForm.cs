@@ -17,6 +17,7 @@ namespace CostChef
             InitializeComponent();
             
             // Initialize database
+
             DatabaseContext.InitializeDatabase();
         }
 
