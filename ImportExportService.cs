@@ -170,7 +170,7 @@ namespace CostChef
                             {
                                 Name = csv.GetField("Name") ?? "",
                                 Unit = csv.GetField("Unit") ?? "",
-                               UnitPrice = (decimal)csv.GetField<double>("Price"),
+                                UnitPrice = (decimal)csv.GetField<double>("Price"),
                                 Category = csv.GetField("Category") ?? ""
                             };
 
@@ -198,11 +198,11 @@ namespace CostChef
         public List<Recipe> ImportRecipeFromCsv(string filePath)
         {
             var recipes = new List<Recipe>();
-            Recipe currentRecipe = null;
             
             try
             {
                 var lines = File.ReadAllLines(filePath);
+                Recipe currentRecipe = null;
                 
                 for (int i = 0; i < lines.Length; i++)
                 {
@@ -247,18 +247,62 @@ namespace CostChef
                     }
                     
                     // Look for ingredient lines (they start with numbers)
-                    if (currentRecipe != null && fields.Length > 1 && 
+                    if (currentRecipe != null && fields.Length >= 5 && 
                         int.TryParse(fields[0].Trim(), out int lineNumber))
                     {
-                        var ingredient = new RecipeIngredient
-                        {
-                            IngredientName = fields[1]?.Trim() ?? "",
-                            Unit = fields[2]?.Trim() ?? "",
-                            Quantity = decimal.TryParse(fields[3], out decimal qty) ? qty : 0,
-                            UnitPrice = decimal.TryParse(fields[4], out decimal price) ? price : 0
-                        };
+                        var ingredientName = fields[1]?.Trim() ?? "";
+                        var unit = fields[2]?.Trim() ?? "";
+                        var quantity = decimal.TryParse(fields[3], out decimal qty) ? qty : 0;
+                        var unitPrice = decimal.TryParse(fields[4], out decimal price) ? price : 0;
                         
-                        currentRecipe.Ingredients.Add(ingredient);
+                        if (!string.IsNullOrEmpty(ingredientName))
+                        {
+                            // FIXED: Look up ingredient by name instead of relying on ID
+                            var existingIngredient = DatabaseContext.GetIngredientByName(ingredientName);
+                            
+                            if (existingIngredient != null)
+                            {
+                                var recipeIngredient = new RecipeIngredient
+                                {
+                                    IngredientId = existingIngredient.Id,
+                                    Quantity = quantity,
+                                    IngredientName = ingredientName,
+                                    Unit = unit,
+                                    UnitPrice = unitPrice
+                                };
+                                
+                                currentRecipe.Ingredients.Add(recipeIngredient);
+                            }
+                            else
+                            {
+                                // If ingredient doesn't exist, create a new one
+                                var newIngredient = new Ingredient
+                                {
+                                    Name = ingredientName,
+                                    Unit = unit,
+                                    UnitPrice = unitPrice
+                                };
+                                
+                                DatabaseContext.InsertIngredient(newIngredient);
+                                
+                                // Get the newly created ingredient with its ID
+                                var createdIngredient = DatabaseContext.GetIngredientByName(ingredientName);
+                                
+                                if (createdIngredient != null)
+                                {
+                                    var recipeIngredient = new RecipeIngredient
+                                    {
+                                        IngredientId = createdIngredient.Id,
+                                        Quantity = quantity,
+                                        IngredientName = ingredientName,
+                                        Unit = unit,
+                                        UnitPrice = unitPrice
+                                    };
+                                    
+                                    currentRecipe.Ingredients.Add(recipeIngredient);
+                                }
+                            }
+                        }
                     }
                 }
                 

@@ -233,8 +233,12 @@ namespace CostChef
                     decimal.TryParse(row.Cells["Quantity"].Value.ToString(), out decimal newQuantity))
                 {
                     ingredient.Quantity = newQuantity;
-                    RefreshIngredientsGrid();
-                    CalculateCost();
+                    // Use BeginInvoke to avoid reentrant call
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        RefreshIngredientsGrid();
+                        CalculateCost();
+                    }));
                 }
             }
         }
@@ -393,21 +397,32 @@ namespace CostChef
 
         private void RefreshIngredientsGrid()
         {
-            dataGridViewIngredients.DataSource = null;
-            dataGridViewIngredients.DataSource = currentIngredients.ToList();
-            
-            if (dataGridViewIngredients.Columns.Count > 0)
+            try
             {
-                // Format currency with peso symbol instead of default currency
-                dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol}0.00";
-                dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol}0.0000";
-                dataGridViewIngredients.Columns["IngredientId"].Visible = false;
+                // Suspend layout to prevent reentrant calls
+                dataGridViewIngredients.SuspendLayout();
+                dataGridViewIngredients.DataSource = null;
+                dataGridViewIngredients.DataSource = currentIngredients.ToList();
                 
-                // Make only Quantity column editable
-                foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
+                if (dataGridViewIngredients.Columns.Count > 0)
                 {
-                    column.ReadOnly = (column.HeaderText != "Quantity");
+                    // Format currency with peso symbol instead of default currency
+                    dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol}0.00";
+                    dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol}0.0000";
+                    dataGridViewIngredients.Columns["IngredientId"].Visible = false;
+                    
+                    // Make only Quantity column editable
+                    foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
+                    {
+                        column.ReadOnly = (column.HeaderText != "Quantity");
+                    }
                 }
+                dataGridViewIngredients.ResumeLayout();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error refreshing ingredients grid: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -445,15 +460,9 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
                 return;
             }
 
-            if (currentIngredients.Count == 0)
-            {
-                MessageBox.Show("Please add at least one ingredient to the recipe.", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            // Set the ingredients for the current recipe
-            currentRecipe.Ingredients = currentIngredients;
+            // FIXED: Allow saving recipes without ingredients
+            // Set the ingredients for the current recipe (even if empty)
+            currentRecipe.Ingredients = currentIngredients ?? new List<RecipeIngredient>();
 
             try
             {
@@ -483,7 +492,7 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
             }
 
             // Optionally: Initialize a new recipe for next entry
-            InitializeNewRecipe();
+            // InitializeNewRecipe(); // Commented out so user can continue working with the saved recipe
         }
 
         private void DeleteRecipe()
