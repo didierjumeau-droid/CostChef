@@ -14,11 +14,12 @@ namespace CostChef
         private Button btnClose;
         private Label lblCount;
 
-        // Currency symbol - changed from ₱ to generic symbol
-        private string currencySymbol = "$";
+        // Currency symbol - will be set in constructor
+        private string currencySymbol;
 
         public IngredientsForm()
         {
+            currencySymbol = AppSettings.CurrencySymbol;
             InitializeComponent();
             LoadIngredients();
         }
@@ -95,7 +96,7 @@ namespace CostChef
         {
             if (e.Exception is FormatException)
             {
-                MessageBox.Show("Please enter a valid numeric value for the price (without currency symbol).\n\nExample: 0.85 instead of $0.85", 
+                MessageBox.Show($"Please enter a valid numeric value for the price (without currency symbol).\n\nExample: 0.85 instead of {currencySymbol}0.85", 
                     "Invalid Price Format", 
                     MessageBoxButtons.OK, 
                     MessageBoxIcon.Error);
@@ -210,7 +211,7 @@ namespace CostChef
                     
                     // Current price display
                     var lblCurrent = new Label { 
-                        Text = $"Current: {currencySymbol}{ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
+                        Text = $"Current: {currencySymbol} {ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
                         Location = new System.Drawing.Point(20, 20), 
                         AutoSize = true 
                     };
@@ -315,7 +316,7 @@ namespace CostChef
                             decimal calculatedUnitPrice = shopPrice / quantity;
                             txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
                             
-                            lblCalculated.Text = $"Calculated: {currencySymbol}{shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol}{calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
                             lblCalculated.BackColor = System.Drawing.Color.LightGreen;
                         }
                         else
@@ -340,7 +341,7 @@ namespace CostChef
                             decimal calculatedUnitPrice = shopPrice / quantity;
                             txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
                             
-                            lblCalculated.Text = $"Calculated: {currencySymbol}{shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol}{calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
                             lblCalculated.BackColor = System.Drawing.Color.LightGreen;
                         }
                     }
@@ -360,7 +361,7 @@ namespace CostChef
                         
                         // Refresh just the display instead of reloading DataSource
                         dataGridView.Invalidate();
-                        MessageBox.Show($"Price updated to {currencySymbol}{newPrice:0.00} per {ingredient.Unit}!", "Success", 
+                        MessageBox.Show($"Price updated to {currencySymbol} {newPrice:0.00} per {ingredient.Unit}!", "Success", 
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }

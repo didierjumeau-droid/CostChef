@@ -9,6 +9,7 @@ namespace CostChef
         private Button btnRecipes;
         private Button btnImportExport;
         private Button btnExit;
+        private Button btnSettings; // ✅ ADDED THIS LINE
         private Label lblTitle;
         private Label lblSubtitle;
 
@@ -26,13 +27,14 @@ namespace CostChef
             this.btnRecipes = new Button();
             this.btnImportExport = new Button();
             this.btnExit = new Button();
+            this.btnSettings = new Button(); // ✅ ADDED THIS LINE
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
             
             // Main Form
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(400, 350);
-            this.Text = "CostChef V1.1 - Simple Menu Costing";
+            this.Text = "CostChef v1.1 - Simple Menu Costing";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -76,6 +78,17 @@ namespace CostChef
             this.btnExit.Size = new System.Drawing.Size(240, 40);
             this.btnExit.Text = "Exit";
             this.btnExit.Click += new EventHandler(this.btnExit_Click);
+
+            // ✅ SETTINGS BUTTON - ADDED THIS WHOLE SECTION
+            this.btnSettings.Location = new System.Drawing.Point(350, 12);
+            this.btnSettings.Size = new System.Drawing.Size(30, 30);
+            this.btnSettings.Text = "⚙️";
+            this.btnSettings.Font = new System.Drawing.Font("Segoe UI Emoji", 10F);
+            this.btnSettings.Click += (s, e) => 
+            {
+                var settingsForm = new SettingsForm();
+                settingsForm.ShowDialog();
+            };
             
             // Add controls to form
             this.Controls.Add(this.lblTitle);
@@ -84,6 +97,7 @@ namespace CostChef
             this.Controls.Add(this.btnRecipes);
             this.Controls.Add(this.btnImportExport);
             this.Controls.Add(this.btnExit);
+            this.Controls.Add(this.btnSettings); // ✅ ADDED THIS LINE
             
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -121,7 +135,7 @@ namespace CostChef
         }
     }
 
-    // Data classes remain unchanged
+    // Data classes
     public class Ingredient
     {
         public int Id { get; set; }

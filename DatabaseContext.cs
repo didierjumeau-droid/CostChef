@@ -50,6 +50,13 @@ namespace CostChef
                     UNIQUE(recipe_id, ingredient_id)
                 )";
 
+            // 🆕 CREATE SETTINGS TABLE
+            var createSettingsTable = @"
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )";
+
             using (var command = new SqliteCommand(createIngredientsTable, connection))
             {
                 command.ExecuteNonQuery();
@@ -65,8 +72,16 @@ namespace CostChef
                 command.ExecuteNonQuery();
             }
 
+            using (var command = new SqliteCommand(createSettingsTable, connection))
+            {
+                command.ExecuteNonQuery();
+            }
+
             // NEW: Update existing tables to add missing columns
             UpdateExistingTables(connection);
+
+            // NEW: Initialize default settings
+            InitializeDefaultSettings(connection);
 
             // Clean up any existing duplicate recipes
             CleanDuplicateRecipes();
@@ -76,6 +91,113 @@ namespace CostChef
             {
                 InsertSampleIngredients();
             }
+        }
+
+        // NEW: Initialize default settings
+        private static void InitializeDefaultSettings(SqliteConnection connection)
+        {
+            try
+            {
+                // Check if we already have settings
+                var checkSettings = "SELECT COUNT(*) FROM settings";
+                using var checkCommand = new SqliteCommand(checkSettings, connection);
+                var hasSettings = Convert.ToInt32(checkCommand.ExecuteScalar()) > 0;
+
+                if (!hasSettings)
+                {
+                    // Insert default settings
+                    var defaultSettings = new Dictionary<string, string>
+                    {
+                        {"CurrencySymbol", "$"},
+                        {"CurrencyCode", "USD"},
+                        {"DecimalPlaces", "2"},
+                        {"AutoSave", "true"}
+                    };
+
+                    foreach (var setting in defaultSettings)
+                    {
+                        var insertSql = "INSERT INTO settings (key, value) VALUES (@key, @value)";
+                        using var insertCommand = new SqliteCommand(insertSql, connection);
+                        insertCommand.Parameters.AddWithValue("@key", setting.Key);
+                        insertCommand.Parameters.AddWithValue("@value", setting.Value);
+                        insertCommand.ExecuteNonQuery();
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine("Initialized default settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: Could not initialize settings: {ex.Message}");
+            }
+        }
+
+        // NEW: Settings management methods
+        public static string GetSetting(string key, string defaultValue = "")
+        {
+            try
+            {
+                using var connection = new SqliteConnection(ConnectionString);
+                connection.Open();
+                
+                using var command = new SqliteCommand("SELECT value FROM settings WHERE key = @key", connection);
+                command.Parameters.AddWithValue("@key", key);
+                
+                var result = command.ExecuteScalar();
+                return result?.ToString() ?? defaultValue;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting setting {key}: {ex.Message}");
+                return defaultValue;
+            }
+        }
+
+        public static void SetSetting(string key, string value)
+        {
+            try
+            {
+                using var connection = new SqliteConnection(ConnectionString);
+                connection.Open();
+                
+                using var command = new SqliteCommand(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)",
+                    connection);
+                
+                command.Parameters.AddWithValue("@key", key);
+                command.Parameters.AddWithValue("@value", value);
+                command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error setting setting {key}: {ex.Message}");
+            }
+        }
+
+        // NEW: Get all settings as dictionary
+        public static Dictionary<string, string> GetAllSettings()
+        {
+            var settings = new Dictionary<string, string>();
+            
+            try
+            {
+                using var connection = new SqliteConnection(ConnectionString);
+                connection.Open();
+                
+                using var command = new SqliteCommand("SELECT key, value FROM settings", connection);
+                using var reader = command.ExecuteReader();
+                
+                while (reader.Read())
+                {
+                    settings[reader.GetString("key")] = reader.GetString("value");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting all settings: {ex.Message}");
+            }
+            
+            return settings;
         }
 
         // NEW: Method to update existing tables with new columns
@@ -202,7 +324,7 @@ namespace CostChef
             System.Diagnostics.Debug.WriteLine($"Added {essentialIngredients.Count} essential sample ingredients");
         }
 
-        // Ingredient methods (unchanged)
+        // Ingredient methods
         public static List<Ingredient> GetAllIngredients()
         {
             var ingredients = new List<Ingredient>();
@@ -408,7 +530,7 @@ namespace CostChef
             command.ExecuteNonQuery();
         }
 
-        // Recipe ingredient methods (unchanged)
+        // Recipe ingredient methods
         private static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
         {
             var ingredients = new List<RecipeIngredient>();

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace CostChef
@@ -30,77 +31,50 @@ namespace CostChef
 
             // Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(500, 350);
+            this.ClientSize = new System.Drawing.Size(600, 500);
             this.Text = "CostChef - Starting...";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.None;
             this.BackColor = System.Drawing.Color.White;
             this.ShowInTaskbar = false;
 
-            // Picture Box - You can replace this with your actual logo
-            this.pictureBox.Size = new System.Drawing.Size(150, 150);
-            this.pictureBox.Location = new System.Drawing.Point(175, 50);
+            // Picture Box - 300x300 logo
+            this.pictureBox.Size = new System.Drawing.Size(300, 300);
+            this.pictureBox.Location = new System.Drawing.Point(150, 30);
             this.pictureBox.SizeMode = PictureBoxSizeMode.Zoom;
             this.pictureBox.BackColor = System.Drawing.Color.Transparent;
-            
-            // Create a simple chef hat logo programmatically
-            this.pictureBox.Paint += (s, e) =>
-            {
-                var g = e.Graphics;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                
-                // Chef hat
-                var hatBrush = new SolidBrush(System.Drawing.Color.DodgerBlue);
-                var hatRect = new Rectangle(25, 20, 100, 40);
-                g.FillEllipse(hatBrush, hatRect);
-                
-                // Hat base
-                var baseBrush = new SolidBrush(System.Drawing.Color.White);
-                var baseRect = new Rectangle(15, 40, 120, 20);
-                g.FillRectangle(baseBrush, baseRect);
-                
-                // Utensils
-                var utensilPen = new Pen(System.Drawing.Color.Gray, 3);
-                g.DrawLine(utensilPen, 60, 70, 60, 120); // Spoon handle
-                g.DrawLine(utensilPen, 90, 70, 90, 120); // Fork handle
-                
-                // Spoon bowl
-                g.FillEllipse(new SolidBrush(System.Drawing.Color.LightGray), 45, 115, 30, 15);
-                
-                // Fork prongs
-                for (int i = 0; i < 3; i++)
-                {
-                    g.DrawLine(utensilPen, 85, 70 + (i * 5), 95, 70 + (i * 5));
-                }
-            };
+            this.pictureBox.BorderStyle = BorderStyle.None;
+
+            // Load logo immediately
+            LoadLogoImage();
 
             // Title Label
             this.lblTitle.Text = "CostChef";
-            this.lblTitle.Location = new System.Drawing.Point(0, 210);
-            this.lblTitle.Size = new System.Drawing.Size(500, 40);
+            this.lblTitle.Location = new System.Drawing.Point(0, 350);
+            this.lblTitle.Size = new System.Drawing.Size(600, 40);
             this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 24F, System.Drawing.FontStyle.Bold);
             this.lblTitle.ForeColor = System.Drawing.Color.DodgerBlue;
             this.lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
 
             // Version Label
-            this.lblVersion.Text = "Simple Menu Costing Tool v1.1";
-            this.lblVersion.Location = new System.Drawing.Point(0, 250);
-            this.lblVersion.Size = new System.Drawing.Size(500, 20);
-            this.lblVersion.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular);
+            this.lblVersion.Text = "Food cost made easier";
+            this.lblVersion.Location = new System.Drawing.Point(0, 395);
+            this.lblVersion.Size = new System.Drawing.Size(600, 25);
+            this.lblVersion.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular);
             this.lblVersion.ForeColor = System.Drawing.Color.DarkGray;
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
 
             // Loading Label
             this.lblLoading.Text = "Loading...";
-            this.lblLoading.Location = new System.Drawing.Point(0, 300);
-            this.lblLoading.Size = new System.Drawing.Size(500, 20);
+            this.lblLoading.Location = new System.Drawing.Point(0, 430);
+            this.lblLoading.Size = new System.Drawing.Size(600, 20);
             this.lblLoading.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular);
             this.lblLoading.ForeColor = System.Drawing.Color.Gray;
             this.lblLoading.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
 
             // Progress Bar
-            this.progressBar.Location = new System.Drawing.Point(100, 280);
-            this.progressBar.Size = new System.Drawing.Size(300, 10);
+            this.progressBar.Location = new System.Drawing.Point(150, 425);
+            this.progressBar.Size = new System.Drawing.Size(300, 8);
             this.progressBar.Style = ProgressBarStyle.Marquee;
 
             // Add controls
@@ -109,10 +83,94 @@ namespace CostChef
             });
 
             // Timer
-            this.timer.Interval = 2500; // 2.5 seconds
+            this.timer.Interval = 2500;
             this.timer.Tick += Timer_Tick;
 
             this.ResumeLayout(false);
+        }
+
+        private void LoadLogoImage()
+        {
+            try
+            {
+                // Look for logo in these locations
+                string[] possiblePaths = {
+                    "logo.png",
+                    "logo.jpg",
+                    "logo.bmp",
+                    "splash.png", 
+                    "splash.jpg",
+                    "images/logo.png",
+                    "images/logo.jpg",
+                    "assets/logo.png",
+                    "assets/logo.jpg"
+                };
+
+                string logoPath = null;
+                foreach (string path in possiblePaths)
+                {
+                    if (File.Exists(path))
+                    {
+                        logoPath = path;
+                        break;
+                    }
+                }
+
+                if (logoPath != null)
+                {
+                    // Load the image file
+                    Image loadedImage = Image.FromFile(logoPath);
+                    pictureBox.Image = loadedImage;
+                }
+                else
+                {
+                    // Fallback to drawn logo
+                    CreateFallbackLogo();
+                }
+            }
+            catch (Exception ex)
+            {
+                // If image loading fails, use the drawn fallback
+                CreateFallbackLogo();
+                System.Diagnostics.Debug.WriteLine($"Error loading logo: {ex.Message}");
+            }
+        }
+
+        private void CreateFallbackLogo()
+        {
+            // Create a bitmap for the fallback logo
+            Bitmap fallbackImage = new Bitmap(300, 300);
+            using (Graphics g = Graphics.FromImage(fallbackImage))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.Clear(Color.White);
+                
+                // Chef hat - scaled for 300x300
+                var hatBrush = new SolidBrush(Color.DodgerBlue);
+                var hatRect = new Rectangle(50, 40, 200, 80);
+                g.FillEllipse(hatBrush, hatRect);
+                
+                // Hat base
+                var baseBrush = new SolidBrush(Color.White);
+                var baseRect = new Rectangle(30, 80, 240, 40);
+                g.FillRectangle(baseBrush, baseRect);
+                
+                // Utensils
+                var utensilPen = new Pen(Color.Gray, 6);
+                g.DrawLine(utensilPen, 120, 140, 120, 240);
+                g.DrawLine(utensilPen, 180, 140, 180, 240);
+                
+                // Spoon bowl
+                g.FillEllipse(new SolidBrush(Color.LightGray), 90, 230, 60, 30);
+                
+                // Fork prongs
+                for (int i = 0; i < 3; i++)
+                {
+                    g.DrawLine(utensilPen, 170, 140 + (i * 10), 190, 140 + (i * 10));
+                }
+            }
+            
+            pictureBox.Image = fallbackImage;
         }
 
         private void SplashScreenForm_Shown(object sender, EventArgs e)

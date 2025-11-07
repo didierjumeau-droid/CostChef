@@ -44,7 +44,7 @@ namespace CostChef
         private List<Recipe> allRecipes = new List<Recipe>();
         
         // Currency symbol
-        private string currencySymbol = "$";
+        private string currencySymbol = AppSettings.CurrencySymbol;
 
         // Add this event for recipe updates
         public event Action RecipesUpdated;
@@ -728,8 +728,15 @@ namespace CostChef
                 
                 if (dataGridViewIngredients.Columns.Count > 0)
                 {
-                    dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol}0.00";
-                    dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol}0.0000";
+                    dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol} 0.00";
+                    dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol} 0.0000";
+
+// Add this after the format lines:
+dataGridViewIngredients.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
+dataGridViewIngredients.Columns["LineCost"].HeaderText = $"Line Cost ({currencySymbol})";
+dataGridViewIngredients.Columns["IngredientName"].HeaderText = "Ingredient";
+dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
+
                     dataGridViewIngredients.Columns["IngredientId"].Visible = false;
                     
                     foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
@@ -763,9 +770,9 @@ namespace CostChef
             decimal targetPrice = Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5;
 
             string summary = $@"Recipe: {currentRecipe.Name}
-Total Cost: {currencySymbol}{totalCost:F2} | Cost per Serving: {currencySymbol}{costPerServing:F2}
-Suggested Prices: 25%: {currencySymbol}{suggestedPrice25} | 30%: {currencySymbol}{suggestedPrice30} | 35%: {currencySymbol}{suggestedPrice35}
-Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{targetPrice}";
+Total Cost: {currencySymbol} {totalCost:F2} | Cost per Serving: {currencySymbol} {costPerServing:F2}
+Suggested Prices: 25%: {currencySymbol} {suggestedPrice25} | 30%: {currencySymbol} {suggestedPrice30} | 35%: {currencySymbol} {suggestedPrice35}
+Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol} {targetPrice}";
 
             lblCostSummary.Text = summary;
         }

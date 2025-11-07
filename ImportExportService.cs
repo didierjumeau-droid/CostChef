@@ -12,7 +12,7 @@ namespace CostChef
     public class ImportExportService
     {
         private readonly JsonSerializerOptions _jsonOptions;
-        private string currencySymbol = "$";
+        private string currencySymbol = AppSettings.CurrencySymbol;
 
         public ImportExportService()
         {
@@ -123,11 +123,11 @@ namespace CostChef
                     decimal costPerServing = totalCost / recipe.BatchYield;
 
                     csv.WriteField("Total Batch Cost");
-                    csv.WriteField($"{currencySymbol}{totalCost:F2}");
+                    csv.WriteField($"{currencySymbol} {totalCost:F2}");
                     csv.NextRecord();
 
                     csv.WriteField("Cost per Serving");
-                    csv.WriteField($"{currencySymbol}{costPerServing:F2}");
+                    csv.WriteField($"{currencySymbol} {costPerServing:F2}");
                     csv.NextRecord();
 
                     // Suggested prices
@@ -137,19 +137,19 @@ namespace CostChef
                     decimal targetPrice = Math.Round((costPerServing / recipe.TargetFoodCostPercentage) / 5, 0) * 5;
 
                     csv.WriteField($"Suggested Price @25%");
-                    csv.WriteField($"{currencySymbol}{suggestedPrice25}");
+                    csv.WriteField($"{currencySymbol} {suggestedPrice25}");
                     csv.NextRecord();
 
                     csv.WriteField($"Suggested Price @30%");
-                    csv.WriteField($"{currencySymbol}{suggestedPrice30}");
+                    csv.WriteField($"{currencySymbol} {suggestedPrice30}");
                     csv.NextRecord();
 
                     csv.WriteField($"Suggested Price @35%");
-                    csv.WriteField($"{currencySymbol}{suggestedPrice35}");
+                    csv.WriteField($"{currencySymbol} {suggestedPrice35}");
                     csv.NextRecord();
 
                     csv.WriteField($"Target Price @{recipe.TargetFoodCostPercentage:P0}");
-                    csv.WriteField($"{currencySymbol}{targetPrice}");
+                    csv.WriteField($"{currencySymbol} {targetPrice}");
                 }
                 return true;
             }
