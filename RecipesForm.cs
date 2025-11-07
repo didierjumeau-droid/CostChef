@@ -885,7 +885,7 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol} {ta
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error deleting recipe: {ex.Message}", "Error", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }

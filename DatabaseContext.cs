@@ -14,6 +14,21 @@ namespace CostChef
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
 
+            // Create suppliers table FIRST
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS suppliers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        contact_person TEXT,
+                        phone TEXT,
+                        email TEXT,
+                        address TEXT
+                    )";
+                command.ExecuteNonQuery();
+            }
+
             // Create ingredients table WITH SUPPLIER SUPPORT
             using (var command = connection.CreateCommand())
             {
@@ -24,7 +39,9 @@ namespace CostChef
                         unit TEXT NOT NULL,
                         unit_price DECIMAL(10,4) NOT NULL,
                         category TEXT,
-                        supplier_name TEXT  -- CHANGED: Added supplier_name column
+                        supplier_id INTEGER,
+                        supplier_name TEXT,
+                        FOREIGN KEY (supplier_id) REFERENCES suppliers (id) ON DELETE SET NULL
                     )";
                 command.ExecuteNonQuery();
             }
@@ -83,10 +100,167 @@ namespace CostChef
                 ";
                 command.ExecuteNonQuery();
             }
+
+            // Insert default suppliers if they don't exist
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = @"
+                    INSERT OR IGNORE INTO suppliers (name, contact_person, phone) VALUES 
+                    ('Local Market', 'John Doe', '555-0101'),
+                    ('Wholesale Foods Inc', 'Jane Smith', '555-0102'),
+                    ('Fresh Produce Co', 'Bob Wilson', '555-0103'),
+                    ('Quality Meats Ltd', 'Alice Brown', '555-0104')
+                ";
+                command.ExecuteNonQuery();
+            }
         }
 
-        // Ingredient methods - UPDATED FOR SUPPLIER SUPPORT
-        public static List<Ingredient> GetAllIngredients()
+        // SUPPLIER METHODS
+        public static List<Supplier> GetAllSuppliers()
+        {
+            var suppliers = new List<Supplier>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM suppliers ORDER BY name";
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                suppliers.Add(new Supplier
+                {
+                    Id = reader.GetInt32("id"),
+                    Name = reader.GetString("name"),
+                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
+                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
+                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
+                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
+                });
+            }
+            
+            return suppliers;
+        }
+
+        public static Supplier GetSupplierById(int id)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM suppliers WHERE id = @id";
+            command.Parameters.AddWithValue("@id", id);
+            
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new Supplier
+                {
+                    Id = reader.GetInt32("id"),
+                    Name = reader.GetString("name"),
+                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
+                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
+                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
+                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
+                };
+            }
+            
+            return null;
+        }
+
+        public static Supplier GetSupplierByName(string name)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM suppliers WHERE name = @name";
+            command.Parameters.AddWithValue("@name", name);
+            
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new Supplier
+                {
+                    Id = reader.GetInt32("id"),
+                    Name = reader.GetString("name"),
+                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
+                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
+                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
+                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
+                };
+            }
+            
+            return null;
+        }
+
+        public static int InsertSupplier(Supplier supplier)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT INTO suppliers (name, contact_person, phone, email, address) 
+                VALUES (@name, @contact_person, @phone, @email, @address);
+                SELECT last_insert_rowid();";
+            
+            command.Parameters.AddWithValue("@name", supplier.Name);
+            command.Parameters.AddWithValue("@contact_person", (object)supplier.ContactPerson ?? DBNull.Value);
+            command.Parameters.AddWithValue("@phone", (object)supplier.Phone ?? DBNull.Value);
+            command.Parameters.AddWithValue("@email", (object)supplier.Email ?? DBNull.Value);
+            command.Parameters.AddWithValue("@address", (object)supplier.Address ?? DBNull.Value);
+            
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+
+        public static void UpdateSupplier(Supplier supplier)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                UPDATE suppliers 
+                SET name = @name, contact_person = @contact_person, phone = @phone, 
+                    email = @email, address = @address 
+                WHERE id = @id";
+            
+            command.Parameters.AddWithValue("@id", supplier.Id);
+            command.Parameters.AddWithValue("@name", supplier.Name);
+            command.Parameters.AddWithValue("@contact_person", (object)supplier.ContactPerson ?? DBNull.Value);
+            command.Parameters.AddWithValue("@phone", (object)supplier.Phone ?? DBNull.Value);
+            command.Parameters.AddWithValue("@email", (object)supplier.Email ?? DBNull.Value);
+            command.Parameters.AddWithValue("@address", (object)supplier.Address ?? DBNull.Value);
+            
+            command.ExecuteNonQuery();
+        }
+
+        public static void DeleteSupplier(int id)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            // First, remove supplier references from ingredients
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "UPDATE ingredients SET supplier_id = NULL, supplier_name = NULL WHERE supplier_id = @id";
+                command.Parameters.AddWithValue("@id", id);
+                command.ExecuteNonQuery();
+            }
+            
+            // Then delete the supplier
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "DELETE FROM suppliers WHERE id = @id";
+                command.Parameters.AddWithValue("@id", id);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        // NEW: Get ingredients by supplier
+        public static List<Ingredient> GetIngredientsBySupplier(int supplierId)
         {
             var ingredients = new List<Ingredient>();
             
@@ -94,7 +268,8 @@ namespace CostChef
             connection.Open();
             
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM ingredients ORDER BY name";
+            command.CommandText = "SELECT * FROM ingredients WHERE supplier_id = @supplierId ORDER BY name";
+            command.Parameters.AddWithValue("@supplierId", supplierId);
             
             using var reader = command.ExecuteReader();
             while (reader.Read())
@@ -106,7 +281,78 @@ namespace CostChef
                     Unit = reader.GetString("unit"),
                     UnitPrice = reader.GetDecimal("unit_price"),
                     Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name") // ADDED
+                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
+                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
+                });
+            }
+            
+            return ingredients;
+        }
+
+        // NEW: Get supplier statistics
+        public static List<SupplierStats> GetSupplierStatistics()
+        {
+            var stats = new List<SupplierStats>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT 
+                    s.id,
+                    s.name,
+                    COUNT(i.id) as ingredient_count,
+                    COALESCE(SUM(i.unit_price), 0) as total_inventory_value,
+                    COALESCE(AVG(i.unit_price), 0) as average_price
+                FROM suppliers s
+                LEFT JOIN ingredients i ON s.id = i.supplier_id
+                GROUP BY s.id, s.name
+                ORDER BY ingredient_count DESC";
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                stats.Add(new SupplierStats
+                {
+                    SupplierId = reader.GetInt32("id"),
+                    SupplierName = reader.GetString("name"),
+                    IngredientCount = reader.GetInt32("ingredient_count"),
+                    TotalInventoryValue = reader.GetDecimal("total_inventory_value"),
+                    AveragePrice = reader.GetDecimal("average_price")
+                });
+            }
+            
+            return stats;
+        }
+
+        // Ingredient methods - UPDATED FOR SUPPLIER SUPPORT
+        public static List<Ingredient> GetAllIngredients()
+        {
+            var ingredients = new List<Ingredient>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT i.*, s.name as supplier_name 
+                FROM ingredients i 
+                LEFT JOIN suppliers s ON i.supplier_id = s.id 
+                ORDER BY i.name";
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                ingredients.Add(new Ingredient
+                {
+                    Id = reader.GetInt32("id"),
+                    Name = reader.GetString("name"),
+                    Unit = reader.GetString("unit"),
+                    UnitPrice = reader.GetDecimal("unit_price"),
+                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
+                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
+                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
                 });
             }
             
@@ -119,7 +365,11 @@ namespace CostChef
             connection.Open();
             
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM ingredients WHERE id = @id";
+            command.CommandText = @"
+                SELECT i.*, s.name as supplier_name 
+                FROM ingredients i 
+                LEFT JOIN suppliers s ON i.supplier_id = s.id 
+                WHERE i.id = @id";
             command.Parameters.AddWithValue("@id", id);
             
             using var reader = command.ExecuteReader();
@@ -132,7 +382,8 @@ namespace CostChef
                     Unit = reader.GetString("unit"),
                     UnitPrice = reader.GetDecimal("unit_price"),
                     Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name") // ADDED
+                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
+                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
                 };
             }
             
@@ -145,7 +396,11 @@ namespace CostChef
             connection.Open();
             
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM ingredients WHERE name = @name";
+            command.CommandText = @"
+                SELECT i.*, s.name as supplier_name 
+                FROM ingredients i 
+                LEFT JOIN suppliers s ON i.supplier_id = s.id 
+                WHERE i.name = @name";
             command.Parameters.AddWithValue("@name", name);
             
             using var reader = command.ExecuteReader();
@@ -158,7 +413,8 @@ namespace CostChef
                     Unit = reader.GetString("unit"),
                     UnitPrice = reader.GetDecimal("unit_price"),
                     Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name") // ADDED
+                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
+                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
                 };
             }
             
@@ -172,14 +428,15 @@ namespace CostChef
             
             using var command = connection.CreateCommand();
             command.CommandText = @"
-                INSERT INTO ingredients (name, unit, unit_price, category, supplier_name) 
-                VALUES (@name, @unit, @unit_price, @category, @supplier_name)"; // UPDATED
+                INSERT INTO ingredients (name, unit, unit_price, category, supplier_id, supplier_name) 
+                VALUES (@name, @unit, @unit_price, @category, @supplier_id, @supplier_name)";
             
             command.Parameters.AddWithValue("@name", ingredient.Name);
             command.Parameters.AddWithValue("@unit", ingredient.Unit);
             command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
             command.Parameters.AddWithValue("@category", (object)ingredient.Category ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value); // ADDED
+            command.Parameters.AddWithValue("@supplier_id", (object)ingredient.SupplierId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value);
             
             command.ExecuteNonQuery();
         }
@@ -193,33 +450,16 @@ namespace CostChef
             command.CommandText = @"
                 UPDATE ingredients 
                 SET name = @name, unit = @unit, unit_price = @unit_price, 
-                    category = @category, supplier_name = @supplier_name 
-                WHERE id = @id"; // UPDATED
+                    category = @category, supplier_id = @supplier_id, supplier_name = @supplier_name 
+                WHERE id = @id";
             
             command.Parameters.AddWithValue("@id", ingredient.Id);
             command.Parameters.AddWithValue("@name", ingredient.Name);
             command.Parameters.AddWithValue("@unit", ingredient.Unit);
             command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
             command.Parameters.AddWithValue("@category", (object)ingredient.Category ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value); // ADDED
-            
-            command.ExecuteNonQuery();
-        }
-
-        // NEW: Method to update only supplier
-        public static void UpdateIngredientSupplier(int ingredientId, string supplierName)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                UPDATE ingredients 
-                SET supplier_name = @supplier_name 
-                WHERE id = @id";
-            
-            command.Parameters.AddWithValue("@id", ingredientId);
-            command.Parameters.AddWithValue("@supplier_name", (object)supplierName ?? DBNull.Value);
+            command.Parameters.AddWithValue("@supplier_id", (object)ingredient.SupplierId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value);
             
             command.ExecuteNonQuery();
         }
@@ -327,7 +567,7 @@ namespace CostChef
             
             using var command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT ri.ingredient_id, ri.quantity, i.name, i.unit, i.unit_price
+                SELECT ri.ingredient_id, ri.quantity, i.name, i.unit, i.unit_price, i.supplier_name
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.id
                 WHERE ri.recipe_id = @recipeId";
@@ -342,7 +582,8 @@ namespace CostChef
                     Quantity = reader.GetDecimal("quantity"),
                     IngredientName = reader.GetString("name"),
                     Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price")
+                    UnitPrice = reader.GetDecimal("unit_price"),
+                    Supplier = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
                 });
             }
             
@@ -535,5 +776,26 @@ namespace CostChef
             
             return categories;
         }
+    }
+
+    // NEW: Supplier class
+    public class Supplier
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string ContactPerson { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+    }
+
+    // NEW: Supplier statistics class
+    public class SupplierStats
+    {
+        public int SupplierId { get; set; }
+        public string SupplierName { get; set; } = string.Empty;
+        public int IngredientCount { get; set; }
+        public decimal TotalInventoryValue { get; set; }
+        public decimal AveragePrice { get; set; }
     }
 }
