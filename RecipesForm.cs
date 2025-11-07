@@ -31,7 +31,7 @@ namespace CostChef
         private Button btnSearchRecipes;
         private Button btnClearSearch;
 
-        // NEW: Category and tags controls
+        // Category and tags controls
         private Label lblCategory;
         private ComboBox cmbCategory;
         private TextBox txtNewCategory;
@@ -55,7 +55,7 @@ namespace CostChef
             LoadIngredientsComboBox();
             LoadExistingRecipes();
             InitializeNewRecipe();
-            LoadCategories(); // NEW
+            LoadCategories();
         }
 
         private void InitializeComponent()
@@ -84,7 +84,7 @@ namespace CostChef
             this.btnSearchRecipes = new Button();
             this.btnClearSearch = new Button();
 
-            // NEW: Category and Tags Controls
+            // Category and Tags Controls
             this.lblCategory = new Label();
             this.cmbCategory = new ComboBox();
             this.txtNewCategory = new TextBox();
@@ -94,7 +94,7 @@ namespace CostChef
 
             // Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(800, 600);
+            this.ClientSize = new System.Drawing.Size(900, 600); // Wider to accommodate supplier column
             this.Text = "Recipe Costing Calculator";
             this.StartPosition = FormStartPosition.CenterParent;
 
@@ -204,43 +204,43 @@ namespace CostChef
             this.btnRemoveIngredient.Text = "Remove";
             this.btnRemoveIngredient.Click += (s, e) => RemoveIngredient();
 
-            // Ingredients DataGrid
+            // Ingredients DataGrid - WIDER for supplier column
             this.dataGridViewIngredients.Location = new System.Drawing.Point(12, 105);
-            this.dataGridViewIngredients.Size = new System.Drawing.Size(776, 200);
+            this.dataGridViewIngredients.Size = new System.Drawing.Size(876, 200);
             this.dataGridViewIngredients.ReadOnly = false;
             this.dataGridViewIngredients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.dataGridViewIngredients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             this.dataGridViewIngredients.CellEndEdit += new DataGridViewCellEventHandler(this.dataGridViewIngredients_CellEndEdit);
 
-            // NEW: Category Label
+            // Category Label
             this.lblCategory.Location = new System.Drawing.Point(12, 320);
             this.lblCategory.Size = new System.Drawing.Size(100, 20);
             this.lblCategory.Text = "Category:";
             
-            // NEW: Category ComboBox
+            // Category ComboBox
             this.cmbCategory.Location = new System.Drawing.Point(120, 317);
             this.cmbCategory.Size = new System.Drawing.Size(150, 20);
             this.cmbCategory.DropDownStyle = ComboBoxStyle.DropDown;
             this.cmbCategory.TextChanged += (s, e) => currentRecipe.Category = cmbCategory.Text;
 
-            // NEW: New Category TextBox (for adding new categories)
+            // New Category TextBox (for adding new categories)
             this.txtNewCategory.Location = new System.Drawing.Point(280, 317);
             this.txtNewCategory.Size = new System.Drawing.Size(120, 20);
             this.txtNewCategory.PlaceholderText = "New category...";
             this.txtNewCategory.Visible = false;
 
-            // NEW: Manage Categories Button
+            // Manage Categories Button
             this.btnManageCategories.Location = new System.Drawing.Point(410, 315);
             this.btnManageCategories.Size = new System.Drawing.Size(120, 25);
             this.btnManageCategories.Text = "Manage Categories";
             this.btnManageCategories.Click += (s, e) => ShowCategoryManager();
 
-            // NEW: Tags Label
+            // Tags Label
             this.lblTags.Location = new System.Drawing.Point(12, 350);
             this.lblTags.Size = new System.Drawing.Size(100, 20);
             this.lblTags.Text = "Tags:";
             
-            // NEW: Tags TextBox
+            // Tags TextBox
             this.txtTags.Location = new System.Drawing.Point(120, 347);
             this.txtTags.Size = new System.Drawing.Size(300, 20);
             this.txtTags.PlaceholderText = "comma, separated, tags";
@@ -248,7 +248,7 @@ namespace CostChef
 
             // Cost Summary - Adjusted position to make room for new controls
             this.lblCostSummary.Location = new System.Drawing.Point(12, 380);
-            this.lblCostSummary.Size = new System.Drawing.Size(776, 80);
+            this.lblCostSummary.Size = new System.Drawing.Size(876, 80);
             this.lblCostSummary.Text = "Add ingredients to calculate cost...";
             this.lblCostSummary.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             this.lblCostSummary.BorderStyle = BorderStyle.FixedSingle;
@@ -273,8 +273,8 @@ namespace CostChef
             this.btnDeleteRecipe.Click += (s, e) => DeleteRecipe();
 
             // Close Button - Adjusted position
-            this.btnClose.Location = new System.Drawing.Point(688, 470);
-            this.btnClose.Size = new System.Drawing.Size(100, 30);
+            this.btnClose.Location = new System.Drawing.Point(808, 470);
+            this.btnClose.Size = new System.Drawing.Size(80, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
 
@@ -285,7 +285,7 @@ namespace CostChef
                 btnLoadRecipe, btnRefreshRecipes, txtSearchRecipes, btnSearchRecipes, btnClearSearch,
                 cmbIngredients, txtQuantity, btnAddIngredient, 
                 btnRemoveIngredient, dataGridViewIngredients, 
-                lblCategory, cmbCategory, txtNewCategory, lblTags, txtTags, btnManageCategories, // NEW controls
+                lblCategory, cmbCategory, txtNewCategory, lblTags, txtTags, btnManageCategories,
                 lblCostSummary, btnCalculate, btnSaveRecipe, btnDeleteRecipe, btnClose
             });
 
@@ -437,7 +437,7 @@ namespace CostChef
             lblExistingRecipes.Text = "Load Recipe:";
         }
 
-        // NEW: Load categories into combo box
+        // Load categories into combo box
         private void LoadCategories()
         {
             try
@@ -474,7 +474,7 @@ namespace CostChef
             }
         }
 
-        // NEW: Update recipe tags from textbox
+        // Update recipe tags from textbox
         private void UpdateRecipeTags()
         {
             var tags = txtTags.Text.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -485,7 +485,7 @@ namespace CostChef
             currentRecipe.Tags = tags;
         }
 
-        // NEW: Category management form
+        // Category management form
         private void ShowCategoryManager()
         {
             using (var form = new Form())
@@ -588,7 +588,7 @@ namespace CostChef
             }
         }
 
-        // UPDATED: Load selected recipe with categories and tags
+        // Load selected recipe with categories and tags
         private void LoadSelectedRecipe()
         {
             try
@@ -661,7 +661,7 @@ namespace CostChef
             }
         }
 
-        // UPDATED: Initialize new recipe with empty category and tags
+        // Initialize new recipe with empty category and tags
         private void InitializeNewRecipe()
         {
             currentRecipe = new Recipe { 
@@ -689,7 +689,8 @@ namespace CostChef
                     Quantity = quantity,
                     IngredientName = selectedIngredient.Name,
                     Unit = selectedIngredient.Unit,
-                    UnitPrice = selectedIngredient.UnitPrice
+                    UnitPrice = selectedIngredient.UnitPrice,
+                    Supplier = selectedIngredient.SupplierName // SET SUPPLIER
                 };
 
                 currentIngredients.Add(recipeIngredient);
@@ -718,6 +719,7 @@ namespace CostChef
             }
         }
 
+        // UPDATED: Now includes supplier column using RecipeIngredient.Supplier property
         private void RefreshIngredientsGrid()
         {
             try
@@ -730,12 +732,11 @@ namespace CostChef
                 {
                     dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol} 0.00";
                     dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol} 0.0000";
-
-// Add this after the format lines:
-dataGridViewIngredients.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
-dataGridViewIngredients.Columns["LineCost"].HeaderText = $"Line Cost ({currencySymbol})";
-dataGridViewIngredients.Columns["IngredientName"].HeaderText = "Ingredient";
-dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
+                    dataGridViewIngredients.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
+                    dataGridViewIngredients.Columns["LineCost"].HeaderText = $"Line Cost ({currencySymbol})";
+                    dataGridViewIngredients.Columns["IngredientName"].HeaderText = "Ingredient";
+                    dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
+                    dataGridViewIngredients.Columns["Supplier"].HeaderText = "Supplier"; // SET SUPPLIER HEADER
 
                     dataGridViewIngredients.Columns["IngredientId"].Visible = false;
                     
@@ -743,6 +744,14 @@ dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
                     {
                         column.ReadOnly = (column.HeaderText != "Quantity");
                     }
+                    
+                    // Adjust column order to include supplier
+                    dataGridViewIngredients.Columns["IngredientName"].DisplayIndex = 0;
+                    dataGridViewIngredients.Columns["Quantity"].DisplayIndex = 1;
+                    dataGridViewIngredients.Columns["Unit"].DisplayIndex = 2;
+                    dataGridViewIngredients.Columns["UnitPrice"].DisplayIndex = 3;
+                    dataGridViewIngredients.Columns["Supplier"].DisplayIndex = 4;
+                    dataGridViewIngredients.Columns["LineCost"].DisplayIndex = 5;
                 }
                 dataGridViewIngredients.ResumeLayout();
             }
@@ -753,6 +762,7 @@ dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
             }
         }
 
+        // UPDATED: Now includes supplier summary using RecipeIngredient.Supplier property
         private void CalculateCost()
         {
             if (currentIngredients.Count == 0)
@@ -769,15 +779,25 @@ dataGridViewIngredients.Columns["Quantity"].HeaderText = "Qty";
             decimal suggestedPrice35 = Math.Round((costPerServing / 0.35m) / 5, 0) * 5;
             decimal targetPrice = Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5;
 
+            // NEW: Supplier summary using RecipeIngredient.Supplier property
+            var suppliers = currentIngredients
+                .Select(i => i.Supplier)
+                .Where(s => !string.IsNullOrEmpty(s) && s != "-")
+                .Distinct()
+                .ToList();
+            
+            string supplierInfo = suppliers.Count > 0 ? $"\nSuppliers: {string.Join(", ", suppliers)}" : "";
+
             string summary = $@"Recipe: {currentRecipe.Name}
 Total Cost: {currencySymbol} {totalCost:F2} | Cost per Serving: {currencySymbol} {costPerServing:F2}
 Suggested Prices: 25%: {currencySymbol} {suggestedPrice25} | 30%: {currencySymbol} {suggestedPrice30} | 35%: {currencySymbol} {suggestedPrice35}
-Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol} {targetPrice}";
+Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol} {targetPrice}
+{supplierInfo}";
 
             lblCostSummary.Text = summary;
         }
 
-        // UPDATED: Save recipe with category and tags
+        // Save recipe with category and tags
         private void SaveRecipe()
         {
             if (string.IsNullOrWhiteSpace(currentRecipe.Name))

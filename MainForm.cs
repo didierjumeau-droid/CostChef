@@ -101,6 +101,18 @@ namespace CostChef
             
             this.ResumeLayout(false);
             this.PerformLayout();
+// TEMPORARY: Add restore button (you can remove this later)
+var btnRestore = new Button();
+btnRestore.Location = new System.Drawing.Point(350, 270);
+btnRestore.Size = new System.Drawing.Size(30, 30);
+btnRestore.Text = "♻";
+btnRestore.Font = new System.Drawing.Font("Segoe UI Emoji", 10F);
+btnRestore.Click += (s, e) => 
+{
+    var restoreForm = new RestoreIngredientsForm();
+    restoreForm.ShowDialog();
+};
+this.Controls.Add(btnRestore);
         }
 
         private void btnIngredients_Click(object sender, EventArgs e)
@@ -171,5 +183,6 @@ namespace CostChef
         public string Unit { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public decimal LineCost => Quantity * UnitPrice;
+	    public string Supplier { get; set; } = string.Empty; // ADD THIS LINE
     }
 }
