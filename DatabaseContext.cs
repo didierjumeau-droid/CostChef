@@ -1,639 +1,464 @@
 using System;
-using System.Collections.Generic;
-using System.Data;
-using Microsoft.Data.Sqlite;
+using System.Windows.Forms;
+using System.Linq;
 
 namespace CostChef
 {
-    public static class DatabaseContext
+    public partial class IngredientsForm : Form
     {
-        private static string ConnectionString => "Data Source=costchef.db";
+        private DataGridView dataGridView;
+        private TextBox txtSearch;
+        private Button btnAdd;
+        private Button btnEdit;
+        private Button btnDelete;
+        private Button btnClose;
+        private Label lblCount;
 
-        public static void InitializeDatabase()
+        // Currency symbol - will be set in constructor
+        private string currencySymbol => AppSettings.CurrencySymbol;
+
+        public IngredientsForm()
         {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
+            InitializeComponent();
+            LoadIngredients();
+        }
 
-            // Create ingredients table
-            var createIngredientsTable = @"
-                CREATE TABLE IF NOT EXISTS ingredients (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
-                    unit TEXT NOT NULL,
-                    unit_price REAL NOT NULL,
-                    category TEXT
-                )";
+        private void InitializeComponent()
+        {
+            this.dataGridView = new DataGridView();
+            this.txtSearch = new TextBox();
+            this.btnAdd = new Button();
+            this.btnEdit = new Button();
+            this.btnDelete = new Button();
+            this.btnClose = new Button();
+            this.lblCount = new Label();
 
-            // UPDATED: Create recipes table with category and tags
-            var createRecipesTable = @"
-                CREATE TABLE IF NOT EXISTS recipes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
-                    description TEXT,
-                    category TEXT,
-                    tags TEXT,
-                    batch_yield INTEGER NOT NULL DEFAULT 1,
-                    target_food_cost_percentage REAL NOT NULL DEFAULT 0.3,
-                    created_date TEXT DEFAULT CURRENT_TIMESTAMP,
-                    modified_date TEXT DEFAULT CURRENT_TIMESTAMP
-                )";
+            // Form
+            this.SuspendLayout();
+            this.ClientSize = new System.Drawing.Size(700, 400); // Wider to accommodate supplier column
+            this.Text = "Manage Ingredients";
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.MaximizeBox = false;
 
-            // Create recipe_ingredients table
-            var createRecipeIngredientsTable = @"
-                CREATE TABLE IF NOT EXISTS recipe_ingredients (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    recipe_id INTEGER NOT NULL,
-                    ingredient_id INTEGER NOT NULL,
-                    quantity REAL NOT NULL,
-                    FOREIGN KEY (recipe_id) REFERENCES recipes (id) ON DELETE CASCADE,
-                    FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE,
-                    UNIQUE(recipe_id, ingredient_id)
-                )";
+            // Search Box
+            this.txtSearch.Location = new System.Drawing.Point(12, 12);
+            this.txtSearch.Size = new System.Drawing.Size(200, 20);
+            this.txtSearch.PlaceholderText = "Search ingredients...";
+            this.txtSearch.TextChanged += (s, e) => LoadIngredients();
 
-            // 🆕 CREATE SETTINGS TABLE
-            var createSettingsTable = @"
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )";
+            // Count Label
+            this.lblCount.Location = new System.Drawing.Point(220, 12);
+            this.lblCount.Size = new System.Drawing.Size(200, 20);
+            this.lblCount.Text = "Total: 0 ingredients";
 
-            using (var command = new SqliteCommand(createIngredientsTable, connection))
+            // DataGridView - NOW EDITABLE!
+            this.dataGridView.Location = new System.Drawing.Point(12, 40);
+            this.dataGridView.Size = new System.Drawing.Size(676, 300);
+            this.dataGridView.ReadOnly = false;
+            this.dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            this.dataGridView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            this.dataGridView.RowHeadersVisible = false;
+            this.dataGridView.CellEndEdit += DataGridView_CellEndEdit;
+            this.dataGridView.DataError += DataGridView_DataError;
+
+            // Buttons
+            this.btnAdd.Location = new System.Drawing.Point(12, 350);
+            this.btnAdd.Size = new System.Drawing.Size(80, 30);
+            this.btnAdd.Text = "Add";
+            this.btnAdd.Click += (s, e) => AddIngredient();
+
+            this.btnEdit.Location = new System.Drawing.Point(102, 350);
+            this.btnEdit.Size = new System.Drawing.Size(80, 30);
+            this.btnEdit.Text = "Edit Price";
+            this.btnEdit.Click += (s, e) => EditSelectedIngredientPrice();
+
+            this.btnDelete.Location = new System.Drawing.Point(192, 350);
+            this.btnDelete.Size = new System.Drawing.Size(80, 30);
+            this.btnDelete.Text = "Delete";
+            this.btnDelete.Click += (s, e) => DeleteIngredient();
+
+            this.btnClose.Location = new System.Drawing.Point(608, 350);
+            this.btnClose.Size = new System.Drawing.Size(80, 30);
+            this.btnClose.Text = "Close";
+            this.btnClose.Click += (s, e) => this.Close();
+
+            // Add controls
+            this.Controls.AddRange(new Control[] {
+                txtSearch, lblCount, dataGridView, btnAdd, btnEdit, btnDelete, btnClose
+            });
+
+            this.ResumeLayout(false);
+            this.PerformLayout();
+        }
+
+        private void DataGridView_DataError(object sender, DataGridViewDataErrorEventArgs e)
+        {
+            if (e.Exception is FormatException)
             {
-                command.ExecuteNonQuery();
-            }
-
-            using (var command = new SqliteCommand(createRecipesTable, connection))
-            {
-                command.ExecuteNonQuery();
-            }
-
-            using (var command = new SqliteCommand(createRecipeIngredientsTable, connection))
-            {
-                command.ExecuteNonQuery();
-            }
-
-            using (var command = new SqliteCommand(createSettingsTable, connection))
-            {
-                command.ExecuteNonQuery();
-            }
-
-            // NEW: Update existing tables to add missing columns
-            UpdateExistingTables(connection);
-
-            // NEW: Initialize default settings
-            InitializeDefaultSettings(connection);
-
-            // Clean up any existing duplicate recipes
-            CleanDuplicateRecipes();
-
-            // Insert minimal sample ingredients if empty
-            if (GetIngredientsCount() == 0)
-            {
-                InsertSampleIngredients();
+                MessageBox.Show($"Please enter a valid numeric value for the price (without currency symbol).\n\nExample: 0.85 instead of {currencySymbol}0.85", 
+                    "Invalid Price Format", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Error);
+                e.ThrowException = false;
             }
         }
 
-        // NEW: Initialize default settings
-        private static void InitializeDefaultSettings(SqliteConnection connection)
+        private void LoadIngredients()
         {
             try
             {
-                // Check if we already have settings
-                var checkSettings = "SELECT COUNT(*) FROM settings";
-                using var checkCommand = new SqliteCommand(checkSettings, connection);
-                var hasSettings = Convert.ToInt32(checkCommand.ExecuteScalar()) > 0;
+                var searchTerm = txtSearch.Text.ToLower();
+                var allIngredients = DatabaseContext.GetAllIngredients();
+                
+                var filteredIngredients = allIngredients
+                    .Where(i => string.IsNullOrEmpty(searchTerm) || 
+                               i.Name.ToLower().Contains(searchTerm))
+                    .OrderBy(i => i.Name)
+                    .ToList();
 
-                if (!hasSettings)
+                // Suspend layout to prevent reentrant calls
+                dataGridView.SuspendLayout();
+                dataGridView.DataSource = null;
+                dataGridView.DataSource = filteredIngredients;
+                
+                if (dataGridView.Columns.Count > 0)
                 {
-                    // Insert default settings
-                    var defaultSettings = new Dictionary<string, string>
+                    // Hide internal columns
+                    dataGridView.Columns["Id"].Visible = false;
+                    dataGridView.Columns["Category"].Visible = false;
+                    dataGridView.Columns["SupplierId"].Visible = false;
+                    dataGridView.Columns["SupplierName"].Visible = false;
+                    
+                    // Format columns
+                    dataGridView.Columns["UnitPrice"].DefaultCellStyle.Format = "0.00";
+                    dataGridView.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
+                    dataGridView.Columns["Name"].HeaderText = "Ingredient Name";
+                    dataGridView.Columns["Unit"].HeaderText = "Unit";
+                    
+                    // Add supplier display column if it doesn't exist
+                    if (!dataGridView.Columns.Contains("SupplierDisplay"))
                     {
-                        {"CurrencySymbol", "$"},
-                        {"CurrencyCode", "USD"},
-                        {"DecimalPlaces", "2"},
-                        {"AutoSave", "true"}
-                    };
-
-                    foreach (var setting in defaultSettings)
-                    {
-                        var insertSql = "INSERT INTO settings (key, value) VALUES (@key, @value)";
-                        using var insertCommand = new SqliteCommand(insertSql, connection);
-                        insertCommand.Parameters.AddWithValue("@key", setting.Key);
-                        insertCommand.Parameters.AddWithValue("@value", setting.Value);
-                        insertCommand.ExecuteNonQuery();
+                        var supplierColumn = new DataGridViewTextBoxColumn
+                        {
+                            Name = "SupplierDisplay",
+                            HeaderText = "Supplier",
+                            ReadOnly = true,
+                            DataPropertyName = "SupplierName" // This binds to the SupplierName property
+                        };
+                        dataGridView.Columns.Add(supplierColumn);
                     }
                     
-                    System.Diagnostics.Debug.WriteLine("Initialized default settings");
+                    // Make only UnitPrice editable
+                    dataGridView.Columns["Name"].ReadOnly = true;
+                    dataGridView.Columns["Unit"].ReadOnly = true;
+                    dataGridView.Columns["UnitPrice"].ReadOnly = false;
+                    dataGridView.Columns["SupplierDisplay"].ReadOnly = true;
+                    
+                    // Set column order
+                    dataGridView.Columns["Name"].DisplayIndex = 0;
+                    dataGridView.Columns["Unit"].DisplayIndex = 1;
+                    dataGridView.Columns["UnitPrice"].DisplayIndex = 2;
+                    dataGridView.Columns["SupplierDisplay"].DisplayIndex = 3;
                 }
+                
+                dataGridView.ResumeLayout();
+                lblCount.Text = $"Total: {filteredIngredients.Count} ingredients";
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Warning: Could not initialize settings: {ex.Message}");
+                MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        // NEW: Settings management methods
-        public static string GetSetting(string key, string defaultValue = "")
+        private void DataGridView_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
-            try
-            {
-                using var connection = new SqliteConnection(ConnectionString);
-                connection.Open();
-                
-                using var command = new SqliteCommand("SELECT value FROM settings WHERE key = @key", connection);
-                command.Parameters.AddWithValue("@key", key);
-                
-                var result = command.ExecuteScalar();
-                return result?.ToString() ?? defaultValue;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error getting setting {key}: {ex.Message}");
-                return defaultValue;
-            }
-        }
-
-        public static void SetSetting(string key, string value)
-        {
-            try
-            {
-                using var connection = new SqliteConnection(ConnectionString);
-                connection.Open();
-                
-                using var command = new SqliteCommand(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)",
-                    connection);
-                
-                command.Parameters.AddWithValue("@key", key);
-                command.Parameters.AddWithValue("@value", value);
-                command.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error setting setting {key}: {ex.Message}");
-            }
-        }
-
-        // NEW: Get all settings as dictionary
-        public static Dictionary<string, string> GetAllSettings()
-        {
-            var settings = new Dictionary<string, string>();
-            
-            try
-            {
-                using var connection = new SqliteConnection(ConnectionString);
-                connection.Open();
-                
-                using var command = new SqliteCommand("SELECT key, value FROM settings", connection);
-                using var reader = command.ExecuteReader();
-                
-                while (reader.Read())
-                {
-                    settings[reader.GetString("key")] = reader.GetString("value");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error getting all settings: {ex.Message}");
-            }
-            
-            return settings;
-        }
-
-        // NEW: Method to update existing tables with new columns
-        private static void UpdateExistingTables(SqliteConnection connection)
-        {
-            try
-            {
-                // Check if category column exists in recipes table
-                var checkCategoryColumn = @"
-                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
-                    WHERE name = 'category'";
-                
-                using var checkCommand = new SqliteCommand(checkCategoryColumn, connection);
-                var hasCategoryColumn = Convert.ToInt32(checkCommand.ExecuteScalar()) > 0;
-
-                if (!hasCategoryColumn)
-                {
-                    var addCategoryColumn = "ALTER TABLE recipes ADD COLUMN category TEXT";
-                    using var alterCommand = new SqliteCommand(addCategoryColumn, connection);
-                    alterCommand.ExecuteNonQuery();
-                    System.Diagnostics.Debug.WriteLine("Added 'category' column to recipes table");
-                }
-
-                // Check if tags column exists in recipes table
-                var checkTagsColumn = @"
-                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
-                    WHERE name = 'tags'";
-                
-                using var checkTagsCommand = new SqliteCommand(checkTagsColumn, connection);
-                var hasTagsColumn = Convert.ToInt32(checkTagsCommand.ExecuteScalar()) > 0;
-
-                if (!hasTagsColumn)
-                {
-                    var addTagsColumn = "ALTER TABLE recipes ADD COLUMN tags TEXT";
-                    using var alterCommand = new SqliteCommand(addTagsColumn, connection);
-                    alterCommand.ExecuteNonQuery();
-                    System.Diagnostics.Debug.WriteLine("Added 'tags' column to recipes table");
-                }
-
-                // Check if description column exists in recipes table
-                var checkDescriptionColumn = @"
-                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
-                    WHERE name = 'description'";
-                
-                using var checkDescCommand = new SqliteCommand(checkDescriptionColumn, connection);
-                var hasDescriptionColumn = Convert.ToInt32(checkDescCommand.ExecuteScalar()) > 0;
-
-                if (!hasDescriptionColumn)
-                {
-                    var addDescriptionColumn = "ALTER TABLE recipes ADD COLUMN description TEXT";
-                    using var alterCommand = new SqliteCommand(addDescriptionColumn, connection);
-                    alterCommand.ExecuteNonQuery();
-                    System.Diagnostics.Debug.WriteLine("Added 'description' column to recipes table");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Warning: Could not update table schema: {ex.Message}");
-            }
-        }
-
-        private static void CleanDuplicateRecipes()
-        {
-            try
-            {
-                using var connection = new SqliteConnection(ConnectionString);
-                connection.Open();
-                
-                var cleanDuplicatesSql = @"
-                    DELETE FROM recipes 
-                    WHERE id NOT IN (
-                        SELECT MIN(id) 
-                        FROM recipes 
-                        GROUP BY name
-                    )";
-                
-                using var command = new SqliteCommand(cleanDuplicatesSql, connection);
-                int duplicatesRemoved = command.ExecuteNonQuery();
-                
-                if (duplicatesRemoved > 0)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Cleaned up {duplicatesRemoved} duplicate recipes");
-                }
-            }
-            catch (Exception)
-            {
-                System.Diagnostics.Debug.WriteLine($"Warning: Could not clean duplicate recipes");
-            }
-        }
-
-        private static int GetIngredientsCount()
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("SELECT COUNT(*) FROM ingredients", connection);
-            return Convert.ToInt32(command.ExecuteScalar());
-        }
-
-        private static void InsertSampleIngredients()
-        {
-            var essentialIngredients = new List<Ingredient>
-            {
-                new Ingredient { Name = "Salt", Unit = "gram", UnitPrice = 0.03m, Category = "Seasoning" },
-                new Ingredient { Name = "Black Pepper", Unit = "gram", UnitPrice = 1.5m, Category = "Seasoning" },
-                new Ingredient { Name = "Cooking Oil", Unit = "ml", UnitPrice = 0.12m, Category = "Oil" },
-                new Ingredient { Name = "Water", Unit = "ml", UnitPrice = 0.0m, Category = "Liquid" },
-                new Ingredient { Name = "All-purpose Flour", Unit = "gram", UnitPrice = 0.1m, Category = "Dry Goods" },
-                new Ingredient { Name = "Sugar", Unit = "gram", UnitPrice = 0.08m, Category = "Dry Goods" }
-            };
-
-            foreach (var ingredient in essentialIngredients)
+            if (e.RowIndex >= 0 && e.ColumnIndex == dataGridView.Columns["UnitPrice"].Index)
             {
                 try
                 {
-                    InsertIngredient(ingredient);
+                    var ingredient = (Ingredient)dataGridView.Rows[e.RowIndex].DataBoundItem;
+                    if (dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value != null && 
+                        decimal.TryParse(dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value.ToString(), 
+                        out decimal newPrice))
+                    {
+                        ingredient.UnitPrice = newPrice;
+                        DatabaseContext.UpdateIngredient(ingredient);
+                        
+                        // Use BeginInvoke to avoid reentrant call
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            // Refresh just the display instead of reloading entire DataSource
+                            dataGridView.InvalidateRow(e.RowIndex);
+                        }));
+                    }
+                    else
+                    {
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            MessageBox.Show("Please enter a valid numeric price (without currency symbol).\n\nExample: 0.85 instead of RM0.85", "Invalid Price Format", 
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            // Reset to original value
+                            dataGridView.CancelEdit();
+                            dataGridView.InvalidateRow(e.RowIndex);
+                        }));
+                    }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Sample ingredient already exists: {ingredient.Name}");
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        MessageBox.Show($"Error updating price: {ex.Message}", "Error", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }));
                 }
             }
-            
-            System.Diagnostics.Debug.WriteLine($"Added {essentialIngredients.Count} essential sample ingredients");
         }
 
-        // Ingredient methods
-        public static List<Ingredient> GetAllIngredients()
+        private void EditSelectedIngredientPrice()
         {
-            var ingredients = new List<Ingredient>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("SELECT * FROM ingredients ORDER BY name", connection);
-            using var reader = command.ExecuteReader();
-            
-            while (reader.Read())
+            if (dataGridView.SelectedRows.Count > 0)
             {
-                ingredients.Add(new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category")
-                });
-            }
-            
-            return ingredients;
-        }
-
-        public static void InsertIngredient(Ingredient ingredient)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "INSERT INTO ingredients (name, unit, unit_price, category) VALUES (@name, @unit, @unitPrice, @category)",
-                connection);
-            
-            command.Parameters.AddWithValue("@name", ingredient.Name);
-            command.Parameters.AddWithValue("@unit", ingredient.Unit);
-            command.Parameters.AddWithValue("@unitPrice", ingredient.UnitPrice);
-            command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
-            
-            command.ExecuteNonQuery();
-        }
-
-        public static void UpdateIngredient(Ingredient ingredient)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "UPDATE ingredients SET name = @name, unit = @unit, unit_price = @unitPrice, category = @category WHERE id = @id",
-                connection);
-            
-            command.Parameters.AddWithValue("@id", ingredient.Id);
-            command.Parameters.AddWithValue("@name", ingredient.Name);
-            command.Parameters.AddWithValue("@unit", ingredient.Unit);
-            command.Parameters.AddWithValue("@unitPrice", ingredient.UnitPrice);
-            command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
-            
-            command.ExecuteNonQuery();
-        }
-
-        public static void DeleteIngredient(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("DELETE FROM ingredients WHERE id = @id", connection);
-            command.Parameters.AddWithValue("@id", id);
-            command.ExecuteNonQuery();
-        }
-
-        public static Ingredient GetIngredientByName(string name)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("SELECT * FROM ingredients WHERE name = @name", connection);
-            command.Parameters.AddWithValue("@name", name);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                return new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category")
-                };
-            }
-            
-            return null;
-        }
-
-        // UPDATED: Recipe methods to handle category and tags
-        public static List<Recipe> GetAllRecipes()
-        {
-            var recipes = new List<Recipe>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("SELECT * FROM recipes ORDER BY name", connection);
-            using var reader = command.ExecuteReader();
-            
-            while (reader.Read())
-            {
-                var recipe = new Recipe
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    BatchYield = reader.GetInt32("batch_yield"),
-                    TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
-                };
+                var ingredient = (Ingredient)dataGridView.SelectedRows[0].DataBoundItem;
                 
-                // Load tags from comma-separated string
-                if (!reader.IsDBNull("tags"))
+                using (var form = new Form())
                 {
-                    var tagsString = reader.GetString("tags");
-                    recipe.Tags = tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim())
-                        .ToList();
+                    form.Text = $"Update Price - {ingredient.Name}";
+                    form.Size = new System.Drawing.Size(400, 350);
+                    form.StartPosition = FormStartPosition.CenterParent;
+                    form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                    form.MaximizeBox = false;
+                    
+                    // Current price display
+                    var lblCurrent = new Label { 
+                        Text = $"Current: {currencySymbol} {ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
+                        Location = new System.Drawing.Point(20, 20), 
+                        AutoSize = true 
+                    };
+                    
+                    // Receipt Information Group Box
+                    var grpReceipt = new GroupBox();
+                    grpReceipt.Text = "Receipt Information (Optional)";
+                    grpReceipt.Location = new System.Drawing.Point(20, 50);
+                    grpReceipt.Size = new System.Drawing.Size(350, 120);
+                    
+                    var lblShopPrice = new Label { 
+                        Text = $"Shop Price ({currencySymbol}):", 
+                        Location = new System.Drawing.Point(15, 25), 
+                        AutoSize = true 
+                    };
+                    var txtShopPrice = new TextBox { 
+                        Text = "", 
+                        Location = new System.Drawing.Point(120, 22), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "175.00"
+                    };
+                    
+                    var lblQuantityBought = new Label { 
+                        Text = "Quantity Bought:", 
+                        Location = new System.Drawing.Point(15, 55), 
+                        AutoSize = true 
+                    };
+                    var txtQuantityBought = new TextBox { 
+                        Text = "", 
+                        Location = new System.Drawing.Point(120, 52), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "200"
+                    };
+                    
+                    var lblBoughtUnit = new Label { 
+                        Text = "Unit:", 
+                        Location = new System.Drawing.Point(15, 85), 
+                        AutoSize = true 
+                    };
+                    var txtBoughtUnit = new TextBox { 
+                        Text = ingredient.Unit, // Default to current unit
+                        Location = new System.Drawing.Point(120, 82), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "g, kg, ml, etc."
+                    };
+                    
+                    var btnCalculate = new Button { 
+                        Text = "Calculate", 
+                        Location = new System.Drawing.Point(230, 50), 
+                        Size = new System.Drawing.Size(80, 25)
+                    };
+                    
+                    // Add receipt controls to group box
+                    grpReceipt.Controls.AddRange(new Control[] {
+                        lblShopPrice, txtShopPrice, lblQuantityBought, txtQuantityBought,
+                        lblBoughtUnit, txtBoughtUnit, btnCalculate
+                    });
+                    
+                    // Calculated result display
+                    var lblCalculated = new Label { 
+                        Text = "Calculated unit price will appear here", 
+                        Location = new System.Drawing.Point(20, 180), 
+                        Size = new System.Drawing.Size(350, 20),
+                        TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                        BorderStyle = BorderStyle.FixedSingle,
+                        BackColor = System.Drawing.Color.LightYellow
+                    };
+                    
+                    // Manual price entry
+                    var lblNew = new Label { 
+                        Text = "New Unit Price:", 
+                        Location = new System.Drawing.Point(20, 210), 
+                        AutoSize = true 
+                    };
+                    var txtNewPrice = new TextBox { 
+                        Text = ingredient.UnitPrice.ToString("0.00"), 
+                        Location = new System.Drawing.Point(120, 207), 
+                        Size = new System.Drawing.Size(100, 20) 
+                    };
+                    
+                    // Buttons
+                    var btnUpdate = new Button { 
+                        Text = "Update", 
+                        DialogResult = DialogResult.OK, 
+                        Location = new System.Drawing.Point(120, 240),
+                        Size = new System.Drawing.Size(80, 30)
+                    };
+                    var btnCancel = new Button { 
+                        Text = "Cancel", 
+                        DialogResult = DialogResult.Cancel, 
+                        Location = new System.Drawing.Point(210, 240),
+                        Size = new System.Drawing.Size(80, 30)
+                    };
+                    
+                    // Calculate button click event
+                    btnCalculate.Click += (s, e) =>
+                    {
+                        if (decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
+                            decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
+                            quantity > 0)
+                        {
+                            decimal calculatedUnitPrice = shopPrice / quantity;
+                            txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
+                            
+                            lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.BackColor = System.Drawing.Color.LightGreen;
+                        }
+                        else
+                        {
+                            lblCalculated.Text = "Please enter valid numbers for shop price and quantity";
+                            lblCalculated.BackColor = System.Drawing.Color.LightCoral;
+                        }
+                    };
+                    
+                    // Auto-calculate when both fields are filled
+                    txtShopPrice.TextChanged += (s, e) => AutoCalculateIfReady();
+                    txtQuantityBought.TextChanged += (s, e) => AutoCalculateIfReady();
+                    
+                    void AutoCalculateIfReady()
+                    {
+                        if (!string.IsNullOrEmpty(txtShopPrice.Text) && 
+                            !string.IsNullOrEmpty(txtQuantityBought.Text) &&
+                            decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
+                            decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
+                            quantity > 0)
+                        {
+                            decimal calculatedUnitPrice = shopPrice / quantity;
+                            txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
+                            
+                            lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.BackColor = System.Drawing.Color.LightGreen;
+                        }
+                    }
+                    
+                    form.Controls.AddRange(new Control[] {
+                        lblCurrent, grpReceipt, lblCalculated, lblNew, txtNewPrice, btnUpdate, btnCancel
+                    });
+                    
+                    form.AcceptButton = btnUpdate;
+                    form.CancelButton = btnCancel;
+                    
+                    if (form.ShowDialog() == DialogResult.OK && 
+                        decimal.TryParse(txtNewPrice.Text, out decimal newPrice))
+                    {
+                        ingredient.UnitPrice = newPrice;
+                        DatabaseContext.UpdateIngredient(ingredient);
+                        
+                        // Refresh just the display instead of reloading DataSource
+                        dataGridView.Invalidate();
+                        MessageBox.Show($"Price updated to {currencySymbol} {newPrice:0.00} per {ingredient.Unit}!", "Success", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
                 }
+            }
+            else
+            {
+                MessageBox.Show("Please select an ingredient to edit.", "Information", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void AddIngredient()
+        {
+            using (var form = new Form())
+            {
+                form.Text = "Add New Ingredient";
+                form.Size = new System.Drawing.Size(300, 200);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
                 
-                // Load recipe ingredients
-                recipe.Ingredients = GetRecipeIngredients(recipe.Id);
+                var lblName = new Label { Text = "Name:", Location = new System.Drawing.Point(20, 20), AutoSize = true };
+                var txtName = new TextBox { Location = new System.Drawing.Point(100, 17), Size = new System.Drawing.Size(150, 20) };
+                var lblUnit = new Label { Text = "Unit:", Location = new System.Drawing.Point(20, 50), AutoSize = true };
+                var txtUnit = new TextBox { Location = new System.Drawing.Point(100, 47), Size = new System.Drawing.Size(150, 20) };
+                var lblPrice = new Label { Text = $"Price ({currencySymbol}):", Location = new System.Drawing.Point(20, 80), AutoSize = true };
+                var txtPrice = new TextBox { Text = "0", Location = new System.Drawing.Point(100, 77), Size = new System.Drawing.Size(150, 20) };
+                var btnOk = new Button { Text = "Add", DialogResult = DialogResult.OK, Location = new System.Drawing.Point(120, 110) };
+                var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new System.Drawing.Point(200, 110) };
                 
-                recipes.Add(recipe);
-            }
-            
-            return recipes;
-        }
-
-        public static int InsertRecipe(Recipe recipe)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            // UPDATED: Include category and tags in insert
-            using var command = new SqliteCommand(
-                "INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) " +
-                "VALUES (@name, @description, @category, @tags, @batchYield, @targetFoodCost); " +
-                "SELECT last_insert_rowid();",
-                connection);
-            
-            command.Parameters.AddWithValue("@name", recipe.Name);
-            command.Parameters.AddWithValue("@description", recipe.Description ?? "");
-            command.Parameters.AddWithValue("@category", recipe.Category ?? "");
-            command.Parameters.AddWithValue("@tags", string.Join(",", recipe.Tags ?? new List<string>()));
-            command.Parameters.AddWithValue("@batchYield", recipe.BatchYield);
-            command.Parameters.AddWithValue("@targetFoodCost", recipe.TargetFoodCostPercentage);
-            
-            var newId = Convert.ToInt32(command.ExecuteScalar());
-            
-            // Insert recipe ingredients
-            foreach (var ingredient in recipe.Ingredients)
-            {
-                InsertRecipeIngredient(newId, ingredient);
-            }
-            
-            return newId;
-        }
-
-        public static void UpdateRecipe(Recipe recipe)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            // UPDATED: Include category and tags in update
-            using var command = new SqliteCommand(
-                "UPDATE recipes SET name = @name, description = @description, category = @category, " +
-                "tags = @tags, batch_yield = @batchYield, target_food_cost_percentage = @targetFoodCost, " +
-                "modified_date = CURRENT_TIMESTAMP WHERE id = @id",
-                connection);
-            
-            command.Parameters.AddWithValue("@id", recipe.Id);
-            command.Parameters.AddWithValue("@name", recipe.Name);
-            command.Parameters.AddWithValue("@description", recipe.Description ?? "");
-            command.Parameters.AddWithValue("@category", recipe.Category ?? "");
-            command.Parameters.AddWithValue("@tags", string.Join(",", recipe.Tags ?? new List<string>()));
-            command.Parameters.AddWithValue("@batchYield", recipe.BatchYield);
-            command.Parameters.AddWithValue("@targetFoodCost", recipe.TargetFoodCostPercentage);
-            
-            command.ExecuteNonQuery();
-            
-            // Update recipe ingredients (delete all and reinsert)
-            DeleteRecipeIngredients(recipe.Id);
-            foreach (var ingredient in recipe.Ingredients)
-            {
-                InsertRecipeIngredient(recipe.Id, ingredient);
-            }
-        }
-
-        public static void DeleteRecipe(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("DELETE FROM recipes WHERE id = @id", connection);
-            command.Parameters.AddWithValue("@id", id);
-            command.ExecuteNonQuery();
-        }
-
-        // Recipe ingredient methods
-        private static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
-        {
-            var ingredients = new List<RecipeIngredient>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "SELECT ri.*, i.name as ingredient_name, i.unit, i.unit_price " +
-                "FROM recipe_ingredients ri " +
-                "JOIN ingredients i ON ri.ingredient_id = i.id " +
-                "WHERE ri.recipe_id = @recipeId", 
-                connection);
-            
-            command.Parameters.AddWithValue("@recipeId", recipeId);
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                ingredients.Add(new RecipeIngredient
+                form.Controls.AddRange(new Control[] { lblName, txtName, lblUnit, txtUnit, lblPrice, txtPrice, btnOk, btnCancel });
+                form.AcceptButton = btnOk;
+                form.CancelButton = btnCancel;
+                
+                if (form.ShowDialog() == DialogResult.OK && 
+                    !string.IsNullOrWhiteSpace(txtName.Text) &&
+                    !string.IsNullOrWhiteSpace(txtUnit.Text) &&
+                    decimal.TryParse(txtPrice.Text, out decimal price))
                 {
-                    IngredientId = reader.GetInt32("ingredient_id"),
-                    Quantity = reader.GetDecimal("quantity"),
-                    IngredientName = reader.GetString("ingredient_name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price")
-                });
+                    var newIngredient = new Ingredient
+                    {
+                        Name = txtName.Text,
+                        Unit = txtUnit.Text,
+                        UnitPrice = price
+                    };
+                    
+                    DatabaseContext.InsertIngredient(newIngredient);
+                    // Reload the entire grid for new ingredient
+                    LoadIngredients();
+                    MessageBox.Show("Ingredient added successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
-            
-            return ingredients;
         }
 
-        private static void InsertRecipeIngredient(int recipeId, RecipeIngredient ingredient)
+        private void DeleteIngredient()
         {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (@recipeId, @ingredientId, @quantity)",
-                connection);
-            
-            command.Parameters.AddWithValue("@recipeId", recipeId);
-            command.Parameters.AddWithValue("@ingredientId", ingredient.IngredientId);
-            command.Parameters.AddWithValue("@quantity", ingredient.Quantity);
-            
-            command.ExecuteNonQuery();
-        }
-
-        private static void DeleteRecipeIngredients(int recipeId)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand("DELETE FROM recipe_ingredients WHERE recipe_id = @recipeId", connection);
-            command.Parameters.AddWithValue("@recipeId", recipeId);
-            command.ExecuteNonQuery();
-        }
-
-        // NEW: Get all unique categories from recipes
-        public static List<string> GetRecipeCategories()
-        {
-            var categories = new List<string>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL AND category != '' ORDER BY category",
-                connection);
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            if (dataGridView.SelectedRows.Count > 0)
             {
-                categories.Add(reader.GetString("category"));
-            }
-            
-            return categories;
-        }
+                var ingredient = (Ingredient)dataGridView.SelectedRows[0].DataBoundItem;
+                var result = MessageBox.Show($"Delete {ingredient.Name}?", "Confirm Delete", 
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-        // NEW: Get all unique tags from recipes
-        public static List<string> GetAllTags()
-        {
-            var tags = new List<string>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = new SqliteCommand(
-                "SELECT tags FROM recipes WHERE tags IS NOT NULL AND tags != ''",
-                connection);
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                var tagsString = reader.GetString("tags");
-                var recipeTags = tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(t => t.Trim())
-                    .Where(t => !string.IsNullOrEmpty(t));
-                
-                tags.AddRange(recipeTags);
+                if (result == DialogResult.Yes)
+                {
+                    DatabaseContext.DeleteIngredient(ingredient.Id);
+                    // Reload the entire grid after deletion
+                    LoadIngredients();
+                    MessageBox.Show("Ingredient deleted successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
-            
-            return tags.Distinct().OrderBy(t => t).ToList();
+            else
+            {
+                MessageBox.Show("Please select an ingredient to delete.", "Information", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
     }
 }

@@ -143,6 +143,10 @@ namespace CostChef
         public string Unit { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public string Category { get; set; } = string.Empty;
+
+   // NEW: Supplier properties
+    public int? SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
     }
 
     public class Recipe
