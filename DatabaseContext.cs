@@ -24,12 +24,14 @@ namespace CostChef
                     category TEXT
                 )";
 
-            // Create recipes table
+            // UPDATED: Create recipes table with category and tags
             var createRecipesTable = @"
                 CREATE TABLE IF NOT EXISTS recipes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
+                    name TEXT NOT NULL UNIQUE,
                     description TEXT,
+                    category TEXT,
+                    tags TEXT,
                     batch_yield INTEGER NOT NULL DEFAULT 1,
                     target_food_cost_percentage REAL NOT NULL DEFAULT 0.3,
                     created_date TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -63,10 +65,104 @@ namespace CostChef
                 command.ExecuteNonQuery();
             }
 
-            // Insert sample ingredients if empty
+            // NEW: Update existing tables to add missing columns
+            UpdateExistingTables(connection);
+
+            // Clean up any existing duplicate recipes
+            CleanDuplicateRecipes();
+
+            // Insert minimal sample ingredients if empty
             if (GetIngredientsCount() == 0)
             {
                 InsertSampleIngredients();
+            }
+        }
+
+        // NEW: Method to update existing tables with new columns
+        private static void UpdateExistingTables(SqliteConnection connection)
+        {
+            try
+            {
+                // Check if category column exists in recipes table
+                var checkCategoryColumn = @"
+                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
+                    WHERE name = 'category'";
+                
+                using var checkCommand = new SqliteCommand(checkCategoryColumn, connection);
+                var hasCategoryColumn = Convert.ToInt32(checkCommand.ExecuteScalar()) > 0;
+
+                if (!hasCategoryColumn)
+                {
+                    var addCategoryColumn = "ALTER TABLE recipes ADD COLUMN category TEXT";
+                    using var alterCommand = new SqliteCommand(addCategoryColumn, connection);
+                    alterCommand.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("Added 'category' column to recipes table");
+                }
+
+                // Check if tags column exists in recipes table
+                var checkTagsColumn = @"
+                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
+                    WHERE name = 'tags'";
+                
+                using var checkTagsCommand = new SqliteCommand(checkTagsColumn, connection);
+                var hasTagsColumn = Convert.ToInt32(checkTagsCommand.ExecuteScalar()) > 0;
+
+                if (!hasTagsColumn)
+                {
+                    var addTagsColumn = "ALTER TABLE recipes ADD COLUMN tags TEXT";
+                    using var alterCommand = new SqliteCommand(addTagsColumn, connection);
+                    alterCommand.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("Added 'tags' column to recipes table");
+                }
+
+                // Check if description column exists in recipes table
+                var checkDescriptionColumn = @"
+                    SELECT COUNT(*) FROM pragma_table_info('recipes') 
+                    WHERE name = 'description'";
+                
+                using var checkDescCommand = new SqliteCommand(checkDescriptionColumn, connection);
+                var hasDescriptionColumn = Convert.ToInt32(checkDescCommand.ExecuteScalar()) > 0;
+
+                if (!hasDescriptionColumn)
+                {
+                    var addDescriptionColumn = "ALTER TABLE recipes ADD COLUMN description TEXT";
+                    using var alterCommand = new SqliteCommand(addDescriptionColumn, connection);
+                    alterCommand.ExecuteNonQuery();
+                    System.Diagnostics.Debug.WriteLine("Added 'description' column to recipes table");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: Could not update table schema: {ex.Message}");
+            }
+        }
+
+        private static void CleanDuplicateRecipes()
+        {
+            try
+            {
+                using var connection = new SqliteConnection(ConnectionString);
+                connection.Open();
+                
+                var cleanDuplicatesSql = @"
+                    DELETE FROM recipes 
+                    WHERE id NOT IN (
+                        SELECT MIN(id) 
+                        FROM recipes 
+                        GROUP BY name
+                    )";
+                
+                using var command = new SqliteCommand(cleanDuplicatesSql, connection);
+                int duplicatesRemoved = command.ExecuteNonQuery();
+                
+                if (duplicatesRemoved > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Cleaned up {duplicatesRemoved} duplicate recipes");
+                }
+            }
+            catch (Exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: Could not clean duplicate recipes");
             }
         }
 
@@ -81,77 +177,32 @@ namespace CostChef
 
         private static void InsertSampleIngredients()
         {
-            var sampleIngredients = new List<Ingredient>
+            var essentialIngredients = new List<Ingredient>
             {
-                new Ingredient { Name = "All-purpose Flour", Unit = "gram", UnitPrice = 0.1m },
-                new Ingredient { Name = "Bacon", Unit = "gram", UnitPrice = 0.9m },
-                new Ingredient { Name = "Beef Striploin", Unit = "gram", UnitPrice = 1.2m },
-                new Ingredient { Name = "Black Pepper", Unit = "gram", UnitPrice = 1.5m },
-                new Ingredient { Name = "Breadcrumbs", Unit = "gram", UnitPrice = 0.35m },
-                new Ingredient { Name = "Brown Sugar", Unit = "gram", UnitPrice = 0.1m },
-                new Ingredient { Name = "Butter", Unit = "gram", UnitPrice = 1.2m },
-                new Ingredient { Name = "Cabbage", Unit = "gram", UnitPrice = 0.2m },
-                new Ingredient { Name = "Calamansi", Unit = "piece", UnitPrice = 2.5m },
-                new Ingredient { Name = "Carrot", Unit = "piece", UnitPrice = 10m },
-                new Ingredient { Name = "Cheddar Cheese", Unit = "gram", UnitPrice = 0.9m },
-                new Ingredient { Name = "Cheese Sauce", Unit = "tablespoon", UnitPrice = 5m },
-                new Ingredient { Name = "Chicken Breast", Unit = "gram", UnitPrice = 0.32m },
-                new Ingredient { Name = "Chicken Stock (house)", Unit = "ml", UnitPrice = 0.2m },
-                new Ingredient { Name = "Chicken Thigh", Unit = "gram", UnitPrice = 0.4m },
-                new Ingredient { Name = "Cilantro", Unit = "gram", UnitPrice = 1m },
-                new Ingredient { Name = "Condensed Milk (can)", Unit = "can (390 g)", UnitPrice = 60m },
-                new Ingredient { Name = "Cooking Oil", Unit = "ml", UnitPrice = 0.12m },
-                new Ingredient { Name = "Egg", Unit = "piece", UnitPrice = 10m },
-                new Ingredient { Name = "Egg Yolk", Unit = "piece", UnitPrice = 6.5m },
-                new Ingredient { Name = "Evaporated Milk (can)", Unit = "can (370 ml)", UnitPrice = 60m },
-                new Ingredient { Name = "Fish Sauce (Patis)", Unit = "tablespoon", UnitPrice = 1.2m },
-                new Ingredient { Name = "French Fries (prepped, frozen)", Unit = "gram", UnitPrice = 0.17m },
-                new Ingredient { Name = "Fresh Milk", Unit = "ml", UnitPrice = 0.12m },
-                new Ingredient { Name = "Garlic", Unit = "clove", UnitPrice = 2m },
-                new Ingredient { Name = "Green Chili", Unit = "piece", UnitPrice = 3m },
-                new Ingredient { Name = "Ground Beef 80/20", Unit = "gram", UnitPrice = 0.5m },
-                new Ingredient { Name = "Hamburger Bun", Unit = "piece", UnitPrice = 5m },
-                new Ingredient { Name = "Jasmine Rice (raw)", Unit = "gram", UnitPrice = 0.06m },
-                new Ingredient { Name = "Ketchup", Unit = "tablespoon", UnitPrice = 1.5m },
-                new Ingredient { Name = "Lemon", Unit = "piece", UnitPrice = 25m },
-                new Ingredient { Name = "Lettuce", Unit = "leaf", UnitPrice = 4m },
-                new Ingredient { Name = "Mahi-Mahi (Dorado)", Unit = "gram", UnitPrice = 0.75m },
-                new Ingredient { Name = "Mayonnaise (house)", Unit = "tablespoon", UnitPrice = 7m },
-                new Ingredient { Name = "Mozzarella", Unit = "gram", UnitPrice = 0.652m },
-                new Ingredient { Name = "Olive Oil", Unit = "ml", UnitPrice = 0.4m },
-                new Ingredient { Name = "Onion", Unit = "piece", UnitPrice = 10m },
-                new Ingredient { Name = "Oyster Sauce", Unit = "tablespoon", UnitPrice = 1.8m },
-                new Ingredient { Name = "Pancit Canton Noodles", Unit = "gram", UnitPrice = 0.2m },
-                new Ingredient { Name = "Parmesan", Unit = "gram", UnitPrice = 1m },
-                new Ingredient { Name = "Pasta Fettuccine", Unit = "gram", UnitPrice = 0.13m },
-                new Ingredient { Name = "Pasta Spaghetti", Unit = "gram", UnitPrice = 0.13m },
-                new Ingredient { Name = "Pickles", Unit = "slice", UnitPrice = 1.5m },
-                new Ingredient { Name = "Pumpkin", Unit = "gram", UnitPrice = 0.15m },
-                new Ingredient { Name = "Salsa (house)", Unit = "tablespoon", UnitPrice = 4m },
-                new Ingredient { Name = "Salt", Unit = "gram", UnitPrice = 0.03m },
-                new Ingredient { Name = "Shrimp (medium)", Unit = "piece", UnitPrice = 7m },
-                new Ingredient { Name = "Sinigang Mix (Tamarind)", Unit = "tablespoon", UnitPrice = 3m },
-                new Ingredient { Name = "Soy Sauce", Unit = "tablespoon", UnitPrice = 1m },
-                new Ingredient { Name = "Spinach", Unit = "gram", UnitPrice = 0.6m },
-                new Ingredient { Name = "Tempura Flour", Unit = "gram", UnitPrice = 0.5m },
-                new Ingredient { Name = "Tomato Paste", Unit = "tablespoon", UnitPrice = 2m },
-                new Ingredient { Name = "Tomato Sauce", Unit = "ml", UnitPrice = 0.2m },
-                new Ingredient { Name = "Tortilla (8-inch)", Unit = "piece", UnitPrice = 12m },
-                new Ingredient { Name = "Tortilla Chips", Unit = "gram", UnitPrice = 0.4m },
-                new Ingredient { Name = "Tuna Loin", Unit = "gram", UnitPrice = 0.7m },
-                new Ingredient { Name = "Vanilla Extract", Unit = "teaspoon", UnitPrice = 10m },
-                new Ingredient { Name = "White Sugar", Unit = "gram", UnitPrice = 0.08m },
-                new Ingredient { Name = "Yellow Mustard", Unit = "teaspoon", UnitPrice = 1m },
-                new Ingredient { Name = "mushrooms", Unit = "piece", UnitPrice = 2.5m }
+                new Ingredient { Name = "Salt", Unit = "gram", UnitPrice = 0.03m, Category = "Seasoning" },
+                new Ingredient { Name = "Black Pepper", Unit = "gram", UnitPrice = 1.5m, Category = "Seasoning" },
+                new Ingredient { Name = "Cooking Oil", Unit = "ml", UnitPrice = 0.12m, Category = "Oil" },
+                new Ingredient { Name = "Water", Unit = "ml", UnitPrice = 0.0m, Category = "Liquid" },
+                new Ingredient { Name = "All-purpose Flour", Unit = "gram", UnitPrice = 0.1m, Category = "Dry Goods" },
+                new Ingredient { Name = "Sugar", Unit = "gram", UnitPrice = 0.08m, Category = "Dry Goods" }
             };
 
-            foreach (var ingredient in sampleIngredients)
+            foreach (var ingredient in essentialIngredients)
             {
-                InsertIngredient(ingredient);
+                try
+                {
+                    InsertIngredient(ingredient);
+                }
+                catch (Exception)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Sample ingredient already exists: {ingredient.Name}");
+                }
             }
+            
+            System.Diagnostics.Debug.WriteLine($"Added {essentialIngredients.Count} essential sample ingredients");
         }
 
-        // Ingredient methods
+        // Ingredient methods (unchanged)
         public static List<Ingredient> GetAllIngredients()
         {
             var ingredients = new List<Ingredient>();
@@ -246,7 +297,7 @@ namespace CostChef
             return null;
         }
 
-        // Recipe methods
+        // UPDATED: Recipe methods to handle category and tags
         public static List<Recipe> GetAllRecipes()
         {
             var recipes = new List<Recipe>();
@@ -264,9 +315,19 @@ namespace CostChef
                     Id = reader.GetInt32("id"),
                     Name = reader.GetString("name"),
                     Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
+                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
                     BatchYield = reader.GetInt32("batch_yield"),
                     TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
                 };
+                
+                // Load tags from comma-separated string
+                if (!reader.IsDBNull("tags"))
+                {
+                    var tagsString = reader.GetString("tags");
+                    recipe.Tags = tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim())
+                        .ToList();
+                }
                 
                 // Load recipe ingredients
                 recipe.Ingredients = GetRecipeIngredients(recipe.Id);
@@ -282,12 +343,17 @@ namespace CostChef
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             
+            // UPDATED: Include category and tags in insert
             using var command = new SqliteCommand(
-                "INSERT INTO recipes (name, description, batch_yield, target_food_cost_percentage) VALUES (@name, @description, @batchYield, @targetFoodCost); SELECT last_insert_rowid();",
+                "INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) " +
+                "VALUES (@name, @description, @category, @tags, @batchYield, @targetFoodCost); " +
+                "SELECT last_insert_rowid();",
                 connection);
             
             command.Parameters.AddWithValue("@name", recipe.Name);
             command.Parameters.AddWithValue("@description", recipe.Description ?? "");
+            command.Parameters.AddWithValue("@category", recipe.Category ?? "");
+            command.Parameters.AddWithValue("@tags", string.Join(",", recipe.Tags ?? new List<string>()));
             command.Parameters.AddWithValue("@batchYield", recipe.BatchYield);
             command.Parameters.AddWithValue("@targetFoodCost", recipe.TargetFoodCostPercentage);
             
@@ -307,14 +373,18 @@ namespace CostChef
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             
-            // Update recipe
+            // UPDATED: Include category and tags in update
             using var command = new SqliteCommand(
-                "UPDATE recipes SET name = @name, description = @description, batch_yield = @batchYield, target_food_cost_percentage = @targetFoodCost, modified_date = CURRENT_TIMESTAMP WHERE id = @id",
+                "UPDATE recipes SET name = @name, description = @description, category = @category, " +
+                "tags = @tags, batch_yield = @batchYield, target_food_cost_percentage = @targetFoodCost, " +
+                "modified_date = CURRENT_TIMESTAMP WHERE id = @id",
                 connection);
             
             command.Parameters.AddWithValue("@id", recipe.Id);
             command.Parameters.AddWithValue("@name", recipe.Name);
             command.Parameters.AddWithValue("@description", recipe.Description ?? "");
+            command.Parameters.AddWithValue("@category", recipe.Category ?? "");
+            command.Parameters.AddWithValue("@tags", string.Join(",", recipe.Tags ?? new List<string>()));
             command.Parameters.AddWithValue("@batchYield", recipe.BatchYield);
             command.Parameters.AddWithValue("@targetFoodCost", recipe.TargetFoodCostPercentage);
             
@@ -333,13 +403,12 @@ namespace CostChef
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             
-            // Recipe ingredients will be deleted due to CASCADE
             using var command = new SqliteCommand("DELETE FROM recipes WHERE id = @id", connection);
             command.Parameters.AddWithValue("@id", id);
             command.ExecuteNonQuery();
         }
 
-        // Recipe ingredient methods
+        // Recipe ingredient methods (unchanged)
         private static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
         {
             var ingredients = new List<RecipeIngredient>();
@@ -396,6 +465,53 @@ namespace CostChef
             using var command = new SqliteCommand("DELETE FROM recipe_ingredients WHERE recipe_id = @recipeId", connection);
             command.Parameters.AddWithValue("@recipeId", recipeId);
             command.ExecuteNonQuery();
+        }
+
+        // NEW: Get all unique categories from recipes
+        public static List<string> GetRecipeCategories()
+        {
+            var categories = new List<string>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = new SqliteCommand(
+                "SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL AND category != '' ORDER BY category",
+                connection);
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                categories.Add(reader.GetString("category"));
+            }
+            
+            return categories;
+        }
+
+        // NEW: Get all unique tags from recipes
+        public static List<string> GetAllTags()
+        {
+            var tags = new List<string>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = new SqliteCommand(
+                "SELECT tags FROM recipes WHERE tags IS NOT NULL AND tags != ''",
+                connection);
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var tagsString = reader.GetString("tags");
+                var recipeTags = tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim())
+                    .Where(t => !string.IsNullOrEmpty(t));
+                
+                tags.AddRange(recipeTags);
+            }
+            
+            return tags.Distinct().OrderBy(t => t).ToList();
         }
     }
 }

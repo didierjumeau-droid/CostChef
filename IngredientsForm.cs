@@ -14,8 +14,8 @@ namespace CostChef
         private Button btnClose;
         private Label lblCount;
 
-        // Currency symbol - changed from £ to ₱
-        private string currencySymbol = "₱";
+        // Currency symbol - changed from ₱ to generic symbol
+        private string currencySymbol = "$";
 
         public IngredientsForm()
         {
@@ -95,7 +95,7 @@ namespace CostChef
         {
             if (e.Exception is FormatException)
             {
-                MessageBox.Show("Please enter a valid numeric value for the price (without currency symbol).\n\nExample: 0.85 instead of P0.85", 
+                MessageBox.Show("Please enter a valid numeric value for the price (without currency symbol).\n\nExample: 0.85 instead of $0.85", 
                     "Invalid Price Format", 
                     MessageBoxButtons.OK, 
                     MessageBoxIcon.Error);
@@ -202,25 +202,154 @@ namespace CostChef
                 
                 using (var form = new Form())
                 {
-                    form.Text = $"Edit Price - {ingredient.Name}";
-                    form.Size = new System.Drawing.Size(300, 150);
+                    form.Text = $"Update Price - {ingredient.Name}";
+                    form.Size = new System.Drawing.Size(400, 350);
                     form.StartPosition = FormStartPosition.CenterParent;
                     form.FormBorderStyle = FormBorderStyle.FixedDialog;
                     form.MaximizeBox = false;
                     
-                    var lblCurrent = new Label { Text = $"Current: {currencySymbol}{ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
-                        Location = new System.Drawing.Point(20, 20), AutoSize = true };
-                    var lblNew = new Label { Text = "New Price:", 
-                        Location = new System.Drawing.Point(20, 50), AutoSize = true };
-                    var txtNewPrice = new TextBox { Text = ingredient.UnitPrice.ToString("0.00"), 
-                        Location = new System.Drawing.Point(100, 47), Size = new System.Drawing.Size(100, 20) };
-                    var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, 
-                        Location = new System.Drawing.Point(120, 80) };
-                    var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, 
-                        Location = new System.Drawing.Point(200, 80) };
+                    // Current price display
+                    var lblCurrent = new Label { 
+                        Text = $"Current: {currencySymbol}{ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
+                        Location = new System.Drawing.Point(20, 20), 
+                        AutoSize = true 
+                    };
                     
-                    form.Controls.AddRange(new Control[] { lblCurrent, lblNew, txtNewPrice, btnOk, btnCancel });
-                    form.AcceptButton = btnOk;
+                    // Receipt Information Group Box
+                    var grpReceipt = new GroupBox();
+                    grpReceipt.Text = "Receipt Information (Optional)";
+                    grpReceipt.Location = new System.Drawing.Point(20, 50);
+                    grpReceipt.Size = new System.Drawing.Size(350, 120);
+                    
+                    var lblShopPrice = new Label { 
+                        Text = $"Shop Price ({currencySymbol}):", 
+                        Location = new System.Drawing.Point(15, 25), 
+                        AutoSize = true 
+                    };
+                    var txtShopPrice = new TextBox { 
+                        Text = "", 
+                        Location = new System.Drawing.Point(120, 22), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "175.00"
+                    };
+                    
+                    var lblQuantityBought = new Label { 
+                        Text = "Quantity Bought:", 
+                        Location = new System.Drawing.Point(15, 55), 
+                        AutoSize = true 
+                    };
+                    var txtQuantityBought = new TextBox { 
+                        Text = "", 
+                        Location = new System.Drawing.Point(120, 52), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "200"
+                    };
+                    
+                    var lblBoughtUnit = new Label { 
+                        Text = "Unit:", 
+                        Location = new System.Drawing.Point(15, 85), 
+                        AutoSize = true 
+                    };
+                    var txtBoughtUnit = new TextBox { 
+                        Text = ingredient.Unit, // Default to current unit
+                        Location = new System.Drawing.Point(120, 82), 
+                        Size = new System.Drawing.Size(100, 20),
+                        PlaceholderText = "g, kg, ml, etc."
+                    };
+                    
+                    var btnCalculate = new Button { 
+                        Text = "Calculate", 
+                        Location = new System.Drawing.Point(230, 50), 
+                        Size = new System.Drawing.Size(80, 25)
+                    };
+                    
+                    // Add receipt controls to group box
+                    grpReceipt.Controls.AddRange(new Control[] {
+                        lblShopPrice, txtShopPrice, lblQuantityBought, txtQuantityBought,
+                        lblBoughtUnit, txtBoughtUnit, btnCalculate
+                    });
+                    
+                    // Calculated result display
+                    var lblCalculated = new Label { 
+                        Text = "Calculated unit price will appear here", 
+                        Location = new System.Drawing.Point(20, 180), 
+                        Size = new System.Drawing.Size(350, 20),
+                        TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                        BorderStyle = BorderStyle.FixedSingle,
+                        BackColor = System.Drawing.Color.LightYellow
+                    };
+                    
+                    // Manual price entry
+                    var lblNew = new Label { 
+                        Text = "New Unit Price:", 
+                        Location = new System.Drawing.Point(20, 210), 
+                        AutoSize = true 
+                    };
+                    var txtNewPrice = new TextBox { 
+                        Text = ingredient.UnitPrice.ToString("0.00"), 
+                        Location = new System.Drawing.Point(120, 207), 
+                        Size = new System.Drawing.Size(100, 20) 
+                    };
+                    
+                    // Buttons
+                    var btnUpdate = new Button { 
+                        Text = "Update", 
+                        DialogResult = DialogResult.OK, 
+                        Location = new System.Drawing.Point(120, 240),
+                        Size = new System.Drawing.Size(80, 30)
+                    };
+                    var btnCancel = new Button { 
+                        Text = "Cancel", 
+                        DialogResult = DialogResult.Cancel, 
+                        Location = new System.Drawing.Point(210, 240),
+                        Size = new System.Drawing.Size(80, 30)
+                    };
+                    
+                    // Calculate button click event
+                    btnCalculate.Click += (s, e) =>
+                    {
+                        if (decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
+                            decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
+                            quantity > 0)
+                        {
+                            decimal calculatedUnitPrice = shopPrice / quantity;
+                            txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
+                            
+                            lblCalculated.Text = $"Calculated: {currencySymbol}{shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol}{calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.BackColor = System.Drawing.Color.LightGreen;
+                        }
+                        else
+                        {
+                            lblCalculated.Text = "Please enter valid numbers for shop price and quantity";
+                            lblCalculated.BackColor = System.Drawing.Color.LightCoral;
+                        }
+                    };
+                    
+                    // Auto-calculate when both fields are filled
+                    txtShopPrice.TextChanged += (s, e) => AutoCalculateIfReady();
+                    txtQuantityBought.TextChanged += (s, e) => AutoCalculateIfReady();
+                    
+                    void AutoCalculateIfReady()
+                    {
+                        if (!string.IsNullOrEmpty(txtShopPrice.Text) && 
+                            !string.IsNullOrEmpty(txtQuantityBought.Text) &&
+                            decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
+                            decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
+                            quantity > 0)
+                        {
+                            decimal calculatedUnitPrice = shopPrice / quantity;
+                            txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
+                            
+                            lblCalculated.Text = $"Calculated: {currencySymbol}{shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol}{calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                            lblCalculated.BackColor = System.Drawing.Color.LightGreen;
+                        }
+                    }
+                    
+                    form.Controls.AddRange(new Control[] {
+                        lblCurrent, grpReceipt, lblCalculated, lblNew, txtNewPrice, btnUpdate, btnCancel
+                    });
+                    
+                    form.AcceptButton = btnUpdate;
                     form.CancelButton = btnCancel;
                     
                     if (form.ShowDialog() == DialogResult.OK && 
@@ -231,7 +360,7 @@ namespace CostChef
                         
                         // Refresh just the display instead of reloading DataSource
                         dataGridView.Invalidate();
-                        MessageBox.Show($"Price updated to {currencySymbol}{newPrice:0.00}!", "Success", 
+                        MessageBox.Show($"Price updated to {currencySymbol}{newPrice:0.00} per {ingredient.Unit}!", "Success", 
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }

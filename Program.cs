@@ -10,7 +10,16 @@ namespace CostChef
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            
+            // Show splash screen first
+            using (var splashScreen = new SplashScreenForm())
+            {
+                if (splashScreen.ShowDialog() == DialogResult.OK)
+                {
+                    // Splash screen completed, start main application
+                    Application.Run(new MainForm());
+                }
+            }
         }
     }
 }

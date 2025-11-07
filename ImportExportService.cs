@@ -12,7 +12,7 @@ namespace CostChef
     public class ImportExportService
     {
         private readonly JsonSerializerOptions _jsonOptions;
-        private string currencySymbol = "₱";
+        private string currencySymbol = "$";
 
         public ImportExportService()
         {
@@ -66,6 +66,18 @@ namespace CostChef
                     // Recipe header
                     csv.WriteField("Recipe");
                     csv.WriteField(recipe.Name);
+                    csv.NextRecord();
+
+                    csv.WriteField("Description");
+                    csv.WriteField(recipe.Description ?? "");
+                    csv.NextRecord();
+
+                    csv.WriteField("Category");
+                    csv.WriteField(recipe.Category ?? "");
+                    csv.NextRecord();
+
+                    csv.WriteField("Tags");
+                    csv.WriteField(string.Join(",", recipe.Tags ?? new List<string>()));
                     csv.NextRecord();
 
                     csv.WriteField("Batch Yield");
@@ -209,6 +221,10 @@ namespace CostChef
                     var line = lines[i];
                     var fields = line.Split(',');
                     
+                    // Skip empty lines
+                    if (fields.All(f => string.IsNullOrWhiteSpace(f)))
+                        continue;
+
                     // Look for recipe header
                     if (fields.Length > 1 && fields[0].Trim() == "Recipe")
                     {
@@ -226,6 +242,30 @@ namespace CostChef
                             TargetFoodCostPercentage = 0.3m,
                             Ingredients = new List<RecipeIngredient>()
                         };
+                    }
+                    
+                    // Look for description
+                    if (currentRecipe != null && fields.Length > 1 && fields[0].Trim() == "Description")
+                    {
+                        currentRecipe.Description = fields[1].Trim();
+                    }
+                    
+                    // Look for category
+                    if (currentRecipe != null && fields.Length > 1 && fields[0].Trim() == "Category")
+                    {
+                        currentRecipe.Category = fields[1].Trim();
+                    }
+                    
+                    // Look for tags
+                    if (currentRecipe != null && fields.Length > 1 && fields[0].Trim() == "Tags")
+                    {
+                        var tagsString = fields[1].Trim();
+                        if (!string.IsNullOrEmpty(tagsString))
+                        {
+                            currentRecipe.Tags = tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                .Select(t => t.Trim())
+                                .ToList();
+                        }
                     }
                     
                     // Look for batch yield
@@ -257,7 +297,7 @@ namespace CostChef
                         
                         if (!string.IsNullOrEmpty(ingredientName))
                         {
-                            // FIXED: Look up ingredient by name instead of relying on ID
+                            // Look up ingredient by name
                             var existingIngredient = DatabaseContext.GetIngredientByName(ingredientName);
                             
                             if (existingIngredient != null)
@@ -321,7 +361,60 @@ namespace CostChef
             return recipes;
         }
 
-        // JSON Methods (existing)
+        // NEW: Enhanced import with duplicate handling options
+        public (List<Recipe> imported, List<string> skipped, List<string> errors) ImportRecipesWithOptions(string filePath, bool overwriteDuplicates = false)
+        {
+            var imported = new List<Recipe>();
+            var skipped = new List<string>();
+            var errors = new List<string>();
+            
+            try
+            {
+                var recipesFromFile = ImportRecipeFromCsv(filePath);
+                var existingRecipes = DatabaseContext.GetAllRecipes();
+                
+                foreach (var recipe in recipesFromFile)
+                {
+                    try
+                    {
+                        // Check if recipe already exists
+                        var existingRecipe = existingRecipes.FirstOrDefault(r => 
+                            r.Name.Equals(recipe.Name, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (existingRecipe == null)
+                        {
+                            // New recipe - insert it
+                            DatabaseContext.InsertRecipe(recipe);
+                            imported.Add(recipe);
+                        }
+                        else if (overwriteDuplicates)
+                        {
+                            // Overwrite existing recipe
+                            recipe.Id = existingRecipe.Id;
+                            DatabaseContext.UpdateRecipe(recipe);
+                            imported.Add(recipe);
+                        }
+                        else
+                        {
+                            // Skip duplicate
+                            skipped.Add(recipe.Name);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{recipe.Name}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"File error: {ex.Message}");
+            }
+            
+            return (imported, skipped, errors);
+        }
+
+        // JSON Methods
         public bool ExportRecipesToJson(object recipes, string filePath = "recipes.json")
         {
             try

@@ -17,7 +17,6 @@ namespace CostChef
             InitializeComponent();
             
             // Initialize database
-
             DatabaseContext.InitializeDatabase();
         }
 
@@ -33,7 +32,7 @@ namespace CostChef
             // Main Form
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(400, 350);
-            this.Text = "CostChef - Menu Costing Tool";
+            this.Text = "CostChef V1.1 - Simple Menu Costing";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -43,7 +42,7 @@ namespace CostChef
             this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 18F, System.Drawing.FontStyle.Bold);
             this.lblTitle.Location = new System.Drawing.Point(120, 40);
             this.lblTitle.Size = new System.Drawing.Size(160, 29);
-            this.lblTitle.Text = "CostChef v2.0";
+            this.lblTitle.Text = "CostChef v1.1";
             this.lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             
             // lblSubtitle
@@ -51,7 +50,7 @@ namespace CostChef
             this.lblSubtitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F);
             this.lblSubtitle.Location = new System.Drawing.Point(80, 80);
             this.lblSubtitle.Size = new System.Drawing.Size(240, 17);
-            this.lblSubtitle.Text = "Professional Menu Costing Tool";
+            this.lblSubtitle.Text = "Simple, Affordable Menu Costing";
             this.lblSubtitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             
             // btnIngredients
@@ -122,7 +121,7 @@ namespace CostChef
         }
     }
 
-    // Data classes
+    // Data classes remain unchanged
     public class Ingredient
     {
         public int Id { get; set; }
@@ -137,6 +136,8 @@ namespace CostChef
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public List<string> Tags { get; set; } = new List<string>();
         public int BatchYield { get; set; } = 1;
         public decimal TargetFoodCostPercentage { get; set; } = 0.3m;
         public List<RecipeIngredient> Ingredients { get; set; } = new List<RecipeIngredient>();

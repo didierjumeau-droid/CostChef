@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace CostChef
@@ -20,10 +21,13 @@ namespace CostChef
         private Button btnSelectAll;
         private Button btnSelectNone;
         private Button btnExportSelected;
-        private Button btnDeleteSelected; // NEW BUTTON
+        private Button btnDeleteSelected;
         private Panel pnlRecipeSelection;
         private Panel pnlMain;
         private Label lblSelectRecipes;
+
+        // Store recipe data with IDs to prevent duplicates
+        private List<Recipe> _allRecipes = new List<Recipe>();
 
         public ImportExportForm()
         {
@@ -46,7 +50,7 @@ namespace CostChef
             this.btnSelectAll = new Button();
             this.btnSelectNone = new Button();
             this.btnExportSelected = new Button();
-            this.btnDeleteSelected = new Button(); // NEW BUTTON
+            this.btnDeleteSelected = new Button();
             this.pnlRecipeSelection = new Panel();
             this.pnlMain = new Panel();
             this.lblSelectRecipes = new Label();
@@ -54,7 +58,7 @@ namespace CostChef
             // Form
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(600, 450);
-            this.Text = "Import/Export";
+            this.Text = "Import/Export Data";
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -86,7 +90,7 @@ namespace CostChef
             this.btnImportRecipes.Location = new System.Drawing.Point(20, 155);
             this.btnImportRecipes.Size = new System.Drawing.Size(200, 35);
             this.btnImportRecipes.Text = "Import Recipes from CSV";
-            this.btnImportRecipes.Click += (s, e) => ImportRecipes();
+            this.btnImportRecipes.Click += (s, e) => ImportRecipesWithOptions();
 
             // Close Button
             this.btnClose.Location = new System.Drawing.Point(20, 200);
@@ -114,35 +118,35 @@ namespace CostChef
             // Recipe selection title
             this.lblSelectRecipes.Text = "Select Recipes to Export:";
             this.lblSelectRecipes.Location = new System.Drawing.Point(20, 20);
-            this.lblSelectRecipes.Size = new System.Drawing.Size(200, 20);
+            this.lblSelectRecipes.Size = new System.Drawing.Size(400, 20);
             this.lblSelectRecipes.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold);
 
             // Recipe checklist
             this.chkListRecipes.Location = new System.Drawing.Point(20, 50);
-            this.chkListRecipes.Size = new System.Drawing.Size(400, 250);
+            this.chkListRecipes.Size = new System.Drawing.Size(500, 250);
             this.chkListRecipes.CheckOnClick = true;
 
             // Select All button
             this.btnSelectAll.Location = new System.Drawing.Point(20, 310);
-            this.btnSelectAll.Size = new System.Drawing.Size(80, 30);
+            this.btnSelectAll.Size = new System.Drawing.Size(90, 30);
             this.btnSelectAll.Text = "Select All";
             this.btnSelectAll.Click += (s, e) => SelectAllRecipes();
 
             // Select None button
-            this.btnSelectNone.Location = new System.Drawing.Point(110, 310);
-            this.btnSelectNone.Size = new System.Drawing.Size(80, 30);
+            this.btnSelectNone.Location = new System.Drawing.Point(120, 310);
+            this.btnSelectNone.Size = new System.Drawing.Size(90, 30);
             this.btnSelectNone.Text = "Select None";
             this.btnSelectNone.Click += (s, e) => SelectNoRecipes();
 
             // Export Selected button
-            this.btnExportSelected.Location = new System.Drawing.Point(200, 310);
+            this.btnExportSelected.Location = new System.Drawing.Point(220, 310);
             this.btnExportSelected.Size = new System.Drawing.Size(100, 30);
             this.btnExportSelected.Text = "Export Selected";
             this.btnExportSelected.BackColor = System.Drawing.Color.LightGreen;
             this.btnExportSelected.Click += (s, e) => ExportSelectedRecipes();
 
-            // DELETE SELECTED BUTTON - NEW
-            this.btnDeleteSelected.Location = new System.Drawing.Point(310, 310);
+            // Delete Selected button
+            this.btnDeleteSelected.Location = new System.Drawing.Point(330, 310);
             this.btnDeleteSelected.Size = new System.Drawing.Size(100, 30);
             this.btnDeleteSelected.Text = "Delete Selected";
             this.btnDeleteSelected.BackColor = System.Drawing.Color.LightCoral;
@@ -150,7 +154,7 @@ namespace CostChef
 
             // Back button
             var btnBack = new Button();
-            btnBack.Location = new System.Drawing.Point(420, 310);
+            btnBack.Location = new System.Drawing.Point(440, 310);
             btnBack.Size = new System.Drawing.Size(80, 30);
             btnBack.Text = "Back";
             btnBack.Click += (s, e) => ShowMainPanel();
@@ -172,6 +176,7 @@ namespace CostChef
         {
             pnlMain.Visible = true;
             pnlRecipeSelection.Visible = false;
+            ClearLog();
         }
 
         private void ShowRecipeSelection()
@@ -179,25 +184,33 @@ namespace CostChef
             try
             {
                 // Load recipes from database
-                var recipes = DatabaseContext.GetAllRecipes();
+                _allRecipes = DatabaseContext.GetAllRecipes();
                 chkListRecipes.Items.Clear();
 
-                if (recipes == null || recipes.Count == 0)
+                if (_allRecipes == null || _allRecipes.Count == 0)
                 {
                     MessageBox.Show("No recipes found to export. Please create some recipes first.", 
                         "No Recipes", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                foreach (var recipe in recipes)
+                // Use distinct recipe names to prevent duplicates
+                var distinctRecipes = _allRecipes
+                    .GroupBy(r => r.Name)
+                    .Select(g => g.First())
+                    .OrderBy(r => r.Name)
+                    .ToList();
+
+                foreach (var recipe in distinctRecipes)
                 {
-                    chkListRecipes.Items.Add(recipe.Name, true);
+                    chkListRecipes.Items.Add(new RecipeListItem(recipe), true);
                 }
 
                 pnlMain.Visible = false;
                 pnlRecipeSelection.Visible = true;
                 
-                lblSelectRecipes.Text = $"Select Recipes to Export ({recipes.Count} recipes found):";
+                lblSelectRecipes.Text = $"Select Recipes to Export ({distinctRecipes.Count} recipes found):";
+                Log($"Loaded {distinctRecipes.Count} recipes for export");
             }
             catch (Exception ex)
             {
@@ -223,17 +236,16 @@ namespace CostChef
             }
         }
 
-        // NEW METHOD: Delete selected recipes
         private void DeleteSelectedRecipes()
         {
-            var selectedRecipeNames = new List<string>();
+            var selectedItems = new List<RecipeListItem>();
             
-            foreach (string recipeName in chkListRecipes.CheckedItems)
+            foreach (RecipeListItem item in chkListRecipes.CheckedItems)
             {
-                selectedRecipeNames.Add(recipeName);
+                selectedItems.Add(item);
             }
 
-            if (selectedRecipeNames.Count == 0)
+            if (selectedItems.Count == 0)
             {
                 MessageBox.Show("Please select at least one recipe to delete.", 
                     "No Recipes Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -241,7 +253,7 @@ namespace CostChef
             }
 
             var result = MessageBox.Show(
-                $"Are you sure you want to delete {selectedRecipeNames.Count} recipe(s)?\n\nThis action cannot be undone!",
+                $"Are you sure you want to delete {selectedItems.Count} recipe(s)?\n\nThis action cannot be undone!",
                 "Confirm Delete",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -250,30 +262,39 @@ namespace CostChef
             {
                 try
                 {
-                    // Get the actual recipe objects from database
-                    var allRecipes = DatabaseContext.GetAllRecipes();
                     int deletedCount = 0;
+                    int errorCount = 0;
                     
-                    foreach (var recipeName in selectedRecipeNames)
+                    foreach (var item in selectedItems)
                     {
-                        var recipe = allRecipes.Find(r => r.Name == recipeName);
-                        if (recipe != null)
+                        try
                         {
-                            DatabaseContext.DeleteRecipe(recipe.Id);
+                            DatabaseContext.DeleteRecipe(item.RecipeId);
                             deletedCount++;
-                            Log($"✓ Deleted: {recipeName}");
+                            Log($"✓ Deleted: {item.DisplayName}");
+                        }
+                        catch (Exception ex)
+                        {
+                            errorCount++;
+                            Log($"✗ Error deleting {item.DisplayName}: {ex.Message}");
                         }
                     }
                     
-                    MessageBox.Show($"Successfully deleted {deletedCount} recipe(s).", 
-                        "Delete Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    string message = $"Successfully deleted {deletedCount} recipe(s).";
+                    if (errorCount > 0)
+                    {
+                        message += $"\n{errorCount} recipe(s) could not be deleted.";
+                    }
+                    
+                    MessageBox.Show(message, "Delete Complete", MessageBoxButtons.OK, 
+                        errorCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
                     
                     // Refresh the recipe list
                     ShowRecipeSelection();
                 }
                 catch (Exception ex)
                 {
-                    Log($"✗ Error deleting recipes: {ex.Message}");
+                    Log($"✗ Error during delete operation: {ex.Message}");
                     MessageBox.Show($"Error deleting recipes: {ex.Message}", "Error", 
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
@@ -282,31 +303,18 @@ namespace CostChef
 
         private void ExportSelectedRecipes()
         {
-            var selectedRecipeNames = new List<string>();
+            var selectedItems = new List<RecipeListItem>();
             
-            foreach (string recipeName in chkListRecipes.CheckedItems)
+            foreach (RecipeListItem item in chkListRecipes.CheckedItems)
             {
-                selectedRecipeNames.Add(recipeName);
+                selectedItems.Add(item);
             }
 
-            if (selectedRecipeNames.Count == 0)
+            if (selectedItems.Count == 0)
             {
                 MessageBox.Show("Please select at least one recipe to export.", 
                     "No Recipes Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
-            }
-
-            // Get the actual recipe objects from database
-            var allRecipes = DatabaseContext.GetAllRecipes();
-            var selectedRecipes = new List<Recipe>();
-            
-            foreach (var recipeName in selectedRecipeNames)
-            {
-                var recipe = allRecipes.Find(r => r.Name == recipeName);
-                if (recipe != null)
-                {
-                    selectedRecipes.Add(recipe);
-                }
             }
 
             using (var folderDialog = new FolderBrowserDialog())
@@ -318,27 +326,48 @@ namespace CostChef
                 {
                     string folderPath = folderDialog.SelectedPath;
                     int successCount = 0;
+                    int errorCount = 0;
                     
-                    foreach (var recipe in selectedRecipes)
+                    foreach (var item in selectedItems)
                     {
-                        // Create a safe filename from the recipe name
-                        string safeFileName = MakeValidFileName(recipe.Name);
-                        string filePath = Path.Combine(folderPath, $"{safeFileName}.csv");
-                        
-                        if (ExportSingleRecipeToCsv(recipe, filePath))
+                        // Find the full recipe object
+                        var recipe = _allRecipes.FirstOrDefault(r => r.Id == item.RecipeId);
+                        if (recipe != null)
                         {
-                            successCount++;
-                            Log($"✓ Exported: {recipe.Name}");
+                            string safeFileName = MakeValidFileName(recipe.Name);
+                            string filePath = Path.Combine(folderPath, $"{safeFileName}.csv");
+                            
+                            if (ExportSingleRecipeToCsv(recipe, filePath))
+                            {
+                                successCount++;
+                                Log($"✓ Exported: {recipe.Name}");
+                            }
+                            else
+                            {
+                                errorCount++;
+                                Log($"✗ Failed to export: {recipe.Name}");
+                            }
                         }
                         else
                         {
-                            Log($"✗ Failed to export: {recipe.Name}");
+                            errorCount++;
+                            Log($"✗ Recipe not found: {item.DisplayName}");
                         }
                     }
                     
-                    MessageBox.Show($"Successfully exported {successCount} out of {selectedRecipes.Count} recipes to:\n{folderPath}", 
-                        "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    ShowMainPanel();
+                    string message = $"Successfully exported {successCount} out of {selectedItems.Count} recipes to:\n{folderPath}";
+                    if (errorCount > 0)
+                    {
+                        message += $"\n{errorCount} recipe(s) could not be exported.";
+                    }
+                    
+                    MessageBox.Show(message, "Export Complete", MessageBoxButtons.OK, 
+                        errorCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+                    
+                    if (successCount > 0)
+                    {
+                        ShowMainPanel();
+                    }
                 }
             }
         }
@@ -347,7 +376,6 @@ namespace CostChef
         {
             try
             {
-                // Use the existing ImportExportService to export a single recipe
                 return importExportService.ExportRecipeToCsv(recipe, filePath);
             }
             catch (Exception ex)
@@ -359,9 +387,16 @@ namespace CostChef
 
         private string MakeValidFileName(string name)
         {
+            if (string.IsNullOrEmpty(name)) return "unnamed_recipe";
+            
             string invalidChars = System.Text.RegularExpressions.Regex.Escape(new string(Path.GetInvalidFileNameChars()));
             string invalidRegStr = string.Format(@"([{0}]*\.+$)|([{0}]+)", invalidChars);
-            return System.Text.RegularExpressions.Regex.Replace(name, invalidRegStr, "_");
+            string safeName = System.Text.RegularExpressions.Regex.Replace(name, invalidRegStr, "_");
+            
+            // Trim to reasonable length
+            if (safeName.Length > 50) safeName = safeName.Substring(0, 50);
+            
+            return safeName.Trim();
         }
 
         private void ExportIngredients()
@@ -372,6 +407,7 @@ namespace CostChef
                 {
                     saveDialog.Filter = "CSV Files (*.csv)|*.csv";
                     saveDialog.Title = "Export Ingredients to CSV";
+                    saveDialog.FileName = $"CostChef_Ingredients_{DateTime.Now:yyyyMMdd}.csv";
                     
                     if (saveDialog.ShowDialog() == DialogResult.OK)
                     {
@@ -380,8 +416,8 @@ namespace CostChef
                         
                         if (success)
                         {
-                            lstLog.Items.Add($"✓ Ingredients exported to: {saveDialog.FileName}");
-                            MessageBox.Show("Ingredients exported successfully!", "Export Complete", 
+                            Log($"✓ Ingredients exported to: {Path.GetFileName(saveDialog.FileName)}");
+                            MessageBox.Show($"Ingredients exported successfully!\n\n{saveDialog.FileName}", "Export Complete", 
                                 MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                     }
@@ -389,7 +425,7 @@ namespace CostChef
             }
             catch (Exception ex)
             {
-                lstLog.Items.Add($"✗ Export failed: {ex.Message}");
+                Log($"✗ Export failed: {ex.Message}");
                 MessageBox.Show($"Error exporting ingredients: {ex.Message}", "Export Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -410,19 +446,46 @@ namespace CostChef
                         
                         if (importedIngredients != null && importedIngredients.Count > 0)
                         {
+                            int importedCount = 0;
+                            int skippedCount = 0;
+                            
                             foreach (var ingredient in importedIngredients)
                             {
-                                DatabaseContext.InsertIngredient(ingredient);
+                                try
+                                {
+                                    // Check if ingredient already exists
+                                    var existing = DatabaseContext.GetIngredientByName(ingredient.Name);
+                                    if (existing == null)
+                                    {
+                                        DatabaseContext.InsertIngredient(ingredient);
+                                        importedCount++;
+                                    }
+                                    else
+                                    {
+                                        skippedCount++;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log($"✗ Error importing {ingredient.Name}: {ex.Message}");
+                                    skippedCount++;
+                                }
                             }
                             
-                            lstLog.Items.Add($"✓ {importedIngredients.Count} ingredients imported from: {openDialog.FileName}");
-                            MessageBox.Show($"{importedIngredients.Count} ingredients imported successfully!", "Import Complete", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            string message = $"{importedCount} ingredients imported successfully!";
+                            if (skippedCount > 0)
+                            {
+                                message += $"\n{skippedCount} ingredients skipped (already exist or errors).";
+                            }
+                            
+                            Log($"✓ {importedCount} ingredients imported from: {Path.GetFileName(openDialog.FileName)}");
+                            MessageBox.Show(message, "Import Complete", 
+                                MessageBoxButtons.OK, importedCount > 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                         }
                         else
                         {
-                            lstLog.Items.Add($"✗ No ingredients found in: {openDialog.FileName}");
-                            MessageBox.Show("No ingredients found in the selected file.", "Import Error", 
+                            Log($"✗ No valid ingredients found in: {Path.GetFileName(openDialog.FileName)}");
+                            MessageBox.Show("No valid ingredients found in the selected file.", "Import Error", 
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
@@ -430,13 +493,13 @@ namespace CostChef
             }
             catch (Exception ex)
             {
-                lstLog.Items.Add($"✗ Import failed: {ex.Message}");
+                Log($"✗ Import failed: {ex.Message}");
                 MessageBox.Show($"Error importing ingredients: {ex.Message}", "Import Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ImportRecipes()
+        private void ImportRecipesWithOptions()
         {
             try
             {
@@ -445,43 +508,81 @@ namespace CostChef
                     openDialog.Filter = "CSV Files (*.csv)|*.csv";
                     openDialog.Title = "Import Recipes from CSV";
                     openDialog.Multiselect = true;
-                    
+
                     if (openDialog.ShowDialog() == DialogResult.OK)
                     {
+                        // Ask user about duplicate handling
+                        var duplicateOption = MessageBox.Show(
+                            "How do you want to handle duplicate recipes?\n\n" +
+                            "Yes: Overwrite existing recipes\n" +
+                            "No: Skip duplicates (keep existing recipes)\n" +
+                            "Cancel: Abort import",
+                            "Duplicate Recipe Handling",
+                            MessageBoxButtons.YesNoCancel,
+                            MessageBoxIcon.Question);
+
+                        if (duplicateOption == DialogResult.Cancel)
+                        {
+                            Log("Import cancelled by user");
+                            return;
+                        }
+
+                        bool overwriteDuplicates = (duplicateOption == DialogResult.Yes);
                         int totalImported = 0;
-                        
+                        int totalSkipped = 0;
+                        int totalErrors = 0;
+
                         foreach (string filePath in openDialog.FileNames)
                         {
-                            var importedRecipes = importExportService.ImportRecipeFromCsv(filePath);
+                            var result = importExportService.ImportRecipesWithOptions(filePath, overwriteDuplicates);
                             
-                            if (importedRecipes != null && importedRecipes.Count > 0)
+                            totalImported += result.imported.Count;
+                            totalSkipped += result.skipped.Count;
+                            totalErrors += result.errors.Count;
+
+                            // Log results
+                            foreach (var recipe in result.imported)
                             {
-                                foreach (var recipe in importedRecipes)
-                                {
-                                    DatabaseContext.InsertRecipe(recipe);
-                                    totalImported++;
-                                }
-                                
-                                lstLog.Items.Add($"✓ {importedRecipes.Count} recipes imported from: {Path.GetFileName(filePath)}");
+                                Log($"✓ Imported: {recipe.Name}");
+                            }
+                            foreach (var skipped in result.skipped)
+                            {
+                                Log($"⏭ Skipped (duplicate): {skipped}");
+                            }
+                            foreach (var error in result.errors)
+                            {
+                                Log($"✗ Error: {error}");
                             }
                         }
-                        
+
+                        string message = "";
                         if (totalImported > 0)
                         {
-                            MessageBox.Show($"{totalImported} recipes imported successfully!", "Import Complete", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            message += $"{totalImported} recipe(s) imported successfully!\n";
                         }
-                        else
+                        if (totalSkipped > 0)
                         {
-                            MessageBox.Show("No recipes found in the selected files.", "Import Error", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            message += $"{totalSkipped} recipe(s) skipped (duplicates).\n";
                         }
+                        if (totalErrors > 0)
+                        {
+                            message += $"{totalErrors} recipe(s) had errors.\n";
+                        }
+                        if (totalImported == 0 && totalSkipped == 0 && totalErrors == 0)
+                        {
+                            message = "No recipes found to import.";
+                        }
+
+                        MessageBox.Show(message.Trim(), "Import Complete", 
+                            MessageBoxButtons.OK, 
+                            totalErrors > 0 ? MessageBoxIcon.Warning : 
+                            totalImported > 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                     }
                 }
             }
             catch (Exception ex)
             {
-                lstLog.Items.Add($"✗ Import failed: {ex.Message}");
+                Log($"✗ Import failed: {ex.Message}");
                 MessageBox.Show($"Error importing recipes: {ex.Message}", "Import Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -497,6 +598,32 @@ namespace CostChef
             
             lstLog.Items.Add($"{DateTime.Now:HH:mm:ss} - {message}");
             lstLog.TopIndex = lstLog.Items.Count - 1;
+        }
+
+        private void ClearLog()
+        {
+            if (lstLog.InvokeRequired)
+            {
+                lstLog.Invoke(new Action(ClearLog));
+                return;
+            }
+            
+            lstLog.Items.Clear();
+        }
+
+        // Helper class to prevent duplicate display issues
+        private class RecipeListItem
+        {
+            public int RecipeId { get; }
+            public string DisplayName { get; }
+            
+            public RecipeListItem(Recipe recipe)
+            {
+                RecipeId = recipe.Id;
+                DisplayName = $"{recipe.Name} (ID: {recipe.Id})";
+            }
+            
+            public override string ToString() => DisplayName;
         }
     }
 }
