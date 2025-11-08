@@ -1,5 +1,3 @@
-// [file name]: DatabaseContext.cs
-// [file content begin]
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -648,6 +646,46 @@ namespace CostChef
             return null;
         }
 
+        public static Recipe GetRecipeByName(string name)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM recipes WHERE name = @name";
+            command.Parameters.AddWithValue("@name", name);
+            
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                var recipe = new Recipe
+                {
+                    Id = reader.GetInt32("id"),
+                    Name = reader.GetString("name"),
+                    Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
+                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
+                    BatchYield = reader.GetInt32("batch_yield"),
+                    TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
+                };
+                
+                // Get tags
+                if (!reader.IsDBNull("tags"))
+                {
+                    var tagsString = reader.GetString("tags");
+                    if (!string.IsNullOrEmpty(tagsString))
+                    {
+                        recipe.Tags = new List<string>(tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries));
+                    }
+                }
+                
+                // Get ingredients
+                recipe.Ingredients = GetRecipeIngredients(recipe.Id);
+                return recipe;
+            }
+            
+            return null;
+        }
+
         private static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
         {
             var ingredients = new List<RecipeIngredient>();
@@ -866,6 +904,60 @@ namespace CostChef
             
             return categories;
         }
+
+        public static List<string> GetAllCategories()
+        {
+            var categories = new List<string>();
+            
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT DISTINCT category FROM recipes 
+                WHERE category IS NOT NULL AND category != '' 
+                ORDER BY category";
+            
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                categories.Add(reader.GetString("category"));
+            }
+            
+            return categories;
+        }
+
+        public static bool AddCategoryToDatabase(string category)
+        {
+            try
+            {
+                // Since categories are stored directly in recipes, we don't need to add to a separate table
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool DeleteCategoryFromDatabase(string category)
+        {
+            try
+            {
+                using var connection = new SqliteConnection(ConnectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE recipes SET category = '' WHERE category = @category";
+                command.Parameters.AddWithValue("@category", category);
+                command.ExecuteNonQuery();
+                
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }
-// [file content end]
