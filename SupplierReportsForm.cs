@@ -1,174 +1,166 @@
 using System;
 using System.Windows.Forms;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using System.Text.Json;
 
 namespace CostChef
 {
     public partial class SupplierReportsForm : Form
     {
-        private DataGridView dataGridViewStats;
+        private DataGridView dataGridViewReports;
         private Button btnClose;
-        private Button btnExport;
-        private Label lblTitle;
-        private Label lblSummary;
-
-        private string currencySymbol => AppSettings.CurrencySymbol;
+        private Button btnExportToCsv;
+        private Button btnExportToJson;
 
         public SupplierReportsForm()
         {
             InitializeComponent();
-            LoadSupplierStatistics();
+            LoadSupplierReports();
         }
 
         private void InitializeComponent()
         {
-            this.dataGridViewStats = new DataGridView();
+            this.dataGridViewReports = new DataGridView();
             this.btnClose = new Button();
-            this.btnExport = new Button();
-            this.lblTitle = new Label();
-            this.lblSummary = new Label();
+            this.btnExportToCsv = new Button();
+            this.btnExportToJson = new Button();
 
-            // Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(800, 500);
+            this.ClientSize = new System.Drawing.Size(700, 500);
             this.Text = "Supplier Reports";
             this.StartPosition = FormStartPosition.CenterParent;
-            this.MaximizeBox = false;
-
-            // Title
-            this.lblTitle.Text = "Supplier Statistics Report";
-            this.lblTitle.Location = new System.Drawing.Point(20, 15);
-            this.lblTitle.Size = new System.Drawing.Size(400, 20);
-            this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold);
-
-            // Summary
-            this.lblSummary.Location = new System.Drawing.Point(20, 45);
-            this.lblSummary.Size = new System.Drawing.Size(400, 20);
-            this.lblSummary.Text = "Loading supplier statistics...";
 
             // DataGrid
-            this.dataGridViewStats.Location = new System.Drawing.Point(20, 75);
-            this.dataGridViewStats.Size = new System.Drawing.Size(760, 350);
-            this.dataGridViewStats.ReadOnly = true;
-            this.dataGridViewStats.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridViewStats.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            this.dataGridViewStats.RowHeadersVisible = false;
-            this.dataGridViewStats.CellDoubleClick += (s, e) => ViewSupplierDetails();
+            this.dataGridViewReports.Location = new System.Drawing.Point(12, 12);
+            this.dataGridViewReports.Size = new System.Drawing.Size(676, 350);
+            this.dataGridViewReports.ReadOnly = true;
+            this.dataGridViewReports.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            // Buttons
-            this.btnExport.Location = new System.Drawing.Point(20, 440);
-            this.btnExport.Size = new System.Drawing.Size(100, 30);
-            this.btnExport.Text = "Export to CSV";
-            this.btnExport.Click += (s, e) => ExportToCsv();
+            // Export Buttons
+            this.btnExportToCsv.Location = new System.Drawing.Point(12, 380);
+            this.btnExportToCsv.Size = new System.Drawing.Size(120, 30);
+            this.btnExportToCsv.Text = "Export to CSV";
+            this.btnExportToCsv.Click += (s, e) => ExportSupplierReportsToCsv();
 
-            this.btnClose.Location = new System.Drawing.Point(680, 440);
+            this.btnExportToJson.Location = new System.Drawing.Point(142, 380);
+            this.btnExportToJson.Size = new System.Drawing.Size(120, 30);
+            this.btnExportToJson.Text = "Export to JSON";
+            this.btnExportToJson.Click += (s, e) => ExportSupplierReportsToJson();
+
+            // Close Button
+            this.btnClose.Location = new System.Drawing.Point(588, 380);
             this.btnClose.Size = new System.Drawing.Size(100, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
 
             this.Controls.AddRange(new Control[] {
-                lblTitle, lblSummary, dataGridViewStats, btnExport, btnClose
+                dataGridViewReports, btnExportToCsv, btnExportToJson, btnClose
             });
 
             this.ResumeLayout(false);
-            this.PerformLayout();
         }
 
-        private void LoadSupplierStatistics()
+        private void LoadSupplierReports()
         {
             try
             {
-                var stats = DatabaseContext.GetSupplierStatistics();
+                var supplierStats = DatabaseContext.GetSupplierStatistics();
+                dataGridViewReports.DataSource = supplierStats;
                 
-                dataGridViewStats.DataSource = stats;
-                
-                if (dataGridViewStats.Columns.Count > 0)
+                if (dataGridViewReports.Columns.Count > 0)
                 {
-                    dataGridViewStats.Columns["SupplierId"].Visible = false;
-                    
-                    dataGridViewStats.Columns["TotalInventoryValue"].DefaultCellStyle.Format = $"{currencySymbol} 0.00";
-                    dataGridViewStats.Columns["AveragePrice"].DefaultCellStyle.Format = $"{currencySymbol} 0.00";
-                    
-                    dataGridViewStats.Columns["SupplierName"].HeaderText = "Supplier Name";
-                    dataGridViewStats.Columns["IngredientCount"].HeaderText = "Ingredients";
-                    dataGridViewStats.Columns["TotalInventoryValue"].HeaderText = $"Total Value ({currencySymbol})";
-                    dataGridViewStats.Columns["AveragePrice"].HeaderText = $"Avg Price ({currencySymbol})";
+                    dataGridViewReports.Columns["TotalInventoryValue"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.00";
+                    dataGridViewReports.Columns["AveragePrice"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.0000";
                 }
-
-                // Update summary
-                int totalSuppliers = stats.Count;
-                int totalIngredients = stats.Sum(s => s.IngredientCount);
-                decimal totalValue = stats.Sum(s => s.TotalInventoryValue);
-                
-                lblSummary.Text = $"{totalSuppliers} suppliers | {totalIngredients} total ingredients | Total Inventory Value: {currencySymbol}{totalValue:F2}";
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading supplier statistics: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading supplier reports: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblSummary.Text = "Error loading statistics";
             }
         }
 
-        private void ViewSupplierDetails()
-        {
-            if (dataGridViewStats.SelectedRows.Count > 0)
-            {
-                var stat = (SupplierStats)dataGridViewStats.SelectedRows[0].DataBoundItem;
-                var supplier = DatabaseContext.GetSupplierById(stat.SupplierId);
-                
-                if (supplier != null)
-                {
-                    using (var form = new SupplierIngredientsForm(supplier))
-                    {
-                        form.ShowDialog();
-                    }
-                }
-            }
-        }
-
-        private void ExportToCsv()
+        private void ExportSupplierReportsToCsv()
         {
             try
             {
+                var supplierStats = DatabaseContext.GetSupplierStatistics();
+                if (supplierStats == null || supplierStats.Count == 0)
+                {
+                    MessageBox.Show("No supplier data to export.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
                 using (var saveDialog = new SaveFileDialog())
                 {
-                    saveDialog.Filter = "CSV Files (*.csv)|*.csv";
-                    saveDialog.Title = "Export Supplier Statistics";
-                    saveDialog.FileName = $"Supplier_Statistics_{DateTime.Now:yyyyMMdd}.csv";
+                    saveDialog.Title = "Export Supplier Reports to CSV";
+                    saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+                    saveDialog.FileName = $"supplier_reports_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
+                    saveDialog.OverwritePrompt = true;
                     
                     if (saveDialog.ShowDialog() == DialogResult.OK)
                     {
-                        var stats = DatabaseContext.GetSupplierStatistics();
-                        var importExportService = new ImportExportService();
+                        var lines = new List<string>();
+                        // Header
+                        lines.Add("SupplierName,IngredientCount,TotalInventoryValue,AveragePrice");
                         
-                        // Convert to list of ingredients for export (we'll create a custom format)
-                        var exportData = new List<object>();
-                        foreach (var stat in stats)
+                        foreach (var stat in supplierStats)
                         {
-                            exportData.Add(new {
-                                SupplierName = stat.SupplierName,
-                                IngredientCount = stat.IngredientCount,
-                                TotalInventoryValue = stat.TotalInventoryValue,
-                                AveragePrice = stat.AveragePrice
-                            });
+                            lines.Add($"\"{stat.SupplierName}\",{stat.IngredientCount},{stat.TotalInventoryValue:F2},{stat.AveragePrice:F4}");
                         }
                         
-                        // Use JSON export for now, or create a custom CSV method
-                        bool success = importExportService.ExportIngredientsToJson(exportData, saveDialog.FileName.Replace(".csv", ".json"));
+                        File.WriteAllLines(saveDialog.FileName, lines);
                         
-                        if (success)
-                        {
-                            MessageBox.Show($"Supplier statistics exported successfully!\n\n{saveDialog.FileName.Replace(".csv", ".json")}", "Export Complete", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
+                        MessageBox.Show($"Successfully exported {supplierStats.Count} supplier reports to CSV.", 
+                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error exporting statistics: {ex.Message}", "Export Error", 
+                MessageBox.Show($"Error exporting supplier reports: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ExportSupplierReportsToJson()
+        {
+            try
+            {
+                var supplierStats = DatabaseContext.GetSupplierStatistics();
+                if (supplierStats == null || supplierStats.Count == 0)
+                {
+                    MessageBox.Show("No supplier data to export.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                using (var saveDialog = new SaveFileDialog())
+                {
+                    saveDialog.Title = "Export Supplier Reports to JSON";
+                    saveDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+                    saveDialog.FileName = $"supplier_reports_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
+                    saveDialog.OverwritePrompt = true;
+                    
+                    if (saveDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        var options = new JsonSerializerOptions { WriteIndented = true };
+                        string json = JsonSerializer.Serialize(supplierStats, options);
+                        File.WriteAllText(saveDialog.FileName, json);
+                        
+                        MessageBox.Show($"Successfully exported {supplierStats.Count} supplier reports to JSON.", 
+                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting supplier reports: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

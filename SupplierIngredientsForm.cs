@@ -1,143 +1,161 @@
 using System;
 using System.Windows.Forms;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
+using System.IO;
 
 namespace CostChef
 {
     public partial class SupplierIngredientsForm : Form
     {
         private DataGridView dataGridViewIngredients;
-        private Label lblTitle;
         private Button btnClose;
-        private Button btnExport;
-        private Label lblSummary;
+        private Button btnExportToCsv;
+        private ComboBox cmbSuppliers;
+        private Label lblSupplier;
 
-        private Supplier currentSupplier;
-        private List<Ingredient> supplierIngredients;
-        private string currencySymbol => AppSettings.CurrencySymbol;
-
-        public SupplierIngredientsForm(Supplier supplier)
+        public SupplierIngredientsForm()
         {
-            currentSupplier = supplier;
             InitializeComponent();
-            LoadSupplierIngredients();
+            LoadSuppliers();
         }
 
         private void InitializeComponent()
         {
             this.dataGridViewIngredients = new DataGridView();
-            this.lblTitle = new Label();
             this.btnClose = new Button();
-            this.btnExport = new Button();
-            this.lblSummary = new Label();
+            this.btnExportToCsv = new Button();
+            this.cmbSuppliers = new ComboBox();
+            this.lblSupplier = new Label();
 
-            // Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(700, 450);
-            this.Text = $"Ingredients from {currentSupplier.Name}";
+            this.ClientSize = new System.Drawing.Size(700, 500);
+            this.Text = "Supplier Ingredients";
             this.StartPosition = FormStartPosition.CenterParent;
-            this.MaximizeBox = false;
 
-            // Title
-            this.lblTitle.Text = $"Ingredients supplied by: {currentSupplier.Name}";
-            this.lblTitle.Location = new System.Drawing.Point(20, 15);
-            this.lblTitle.Size = new System.Drawing.Size(400, 20);
-            this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold);
+            // Supplier Selection
+            this.lblSupplier.Location = new System.Drawing.Point(12, 15);
+            this.lblSupplier.Size = new System.Drawing.Size(100, 20);
+            this.lblSupplier.Text = "Select Supplier:";
+            this.lblSupplier.AutoSize = true;
 
-            // Summary
-            this.lblSummary.Location = new System.Drawing.Point(20, 45);
-            this.lblSummary.Size = new System.Drawing.Size(400, 20);
-            this.lblSummary.Text = "Loading...";
+            this.cmbSuppliers.Location = new System.Drawing.Point(120, 12);
+            this.cmbSuppliers.Size = new System.Drawing.Size(200, 20);
+            this.cmbSuppliers.DropDownStyle = ComboBoxStyle.DropDownList;
+            this.cmbSuppliers.SelectedIndexChanged += (s, e) => LoadSupplierIngredients();
 
             // DataGrid
-            this.dataGridViewIngredients.Location = new System.Drawing.Point(20, 75);
-            this.dataGridViewIngredients.Size = new System.Drawing.Size(660, 280);
+            this.dataGridViewIngredients.Location = new System.Drawing.Point(12, 45);
+            this.dataGridViewIngredients.Size = new System.Drawing.Size(676, 350);
             this.dataGridViewIngredients.ReadOnly = true;
-            this.dataGridViewIngredients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.dataGridViewIngredients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            this.dataGridViewIngredients.RowHeadersVisible = false;
 
-            // Buttons
-            this.btnExport.Location = new System.Drawing.Point(20, 370);
-            this.btnExport.Size = new System.Drawing.Size(100, 30);
-            this.btnExport.Text = "Export to CSV";
-            this.btnExport.Click += (s, e) => ExportToCsv();
+            // Export Button
+            this.btnExportToCsv.Location = new System.Drawing.Point(12, 410);
+            this.btnExportToCsv.Size = new System.Drawing.Size(120, 30);
+            this.btnExportToCsv.Text = "Export to CSV";
+            this.btnExportToCsv.Click += (s, e) => ExportSupplierIngredientsToCsv();
 
-            this.btnClose.Location = new System.Drawing.Point(580, 370);
+            // Close Button
+            this.btnClose.Location = new System.Drawing.Point(588, 410);
             this.btnClose.Size = new System.Drawing.Size(100, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
 
             this.Controls.AddRange(new Control[] {
-                lblTitle, lblSummary, dataGridViewIngredients, btnExport, btnClose
+                lblSupplier, cmbSuppliers, dataGridViewIngredients, btnExportToCsv, btnClose
             });
 
             this.ResumeLayout(false);
             this.PerformLayout();
         }
 
-        private void LoadSupplierIngredients()
+        private void LoadSuppliers()
         {
             try
             {
-                supplierIngredients = DatabaseContext.GetIngredientsBySupplier(currentSupplier.Id);
-                
-                dataGridViewIngredients.DataSource = supplierIngredients;
-                
-                if (dataGridViewIngredients.Columns.Count > 0)
-                {
-                    dataGridViewIngredients.Columns["Id"].Visible = false;
-                    dataGridViewIngredients.Columns["SupplierId"].Visible = false;
-                    dataGridViewIngredients.Columns["SupplierName"].Visible = false;
-                    dataGridViewIngredients.Columns["Category"].Visible = false;
-                    
-                    dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol} 0.00";
-                    dataGridViewIngredients.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
-                    dataGridViewIngredients.Columns["Name"].HeaderText = "Ingredient Name";
-                    dataGridViewIngredients.Columns["Unit"].HeaderText = "Unit";
-                }
-
-                // Update summary
-                int ingredientCount = supplierIngredients.Count;
-                decimal totalValue = supplierIngredients.Sum(i => i.UnitPrice);
-                decimal averagePrice = ingredientCount > 0 ? totalValue / ingredientCount : 0;
-                
-                lblSummary.Text = $"{ingredientCount} ingredients | Total Value: {currencySymbol}{totalValue:F2} | Average Price: {currencySymbol}{averagePrice:F2}";
+                var suppliers = DatabaseContext.GetAllSuppliers();
+                cmbSuppliers.DataSource = suppliers;
+                cmbSuppliers.DisplayMember = "Name";
+                cmbSuppliers.ValueMember = "Id";
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ExportToCsv()
+        private void LoadSupplierIngredients()
         {
             try
             {
-                using (var saveDialog = new SaveFileDialog())
+                if (cmbSuppliers.SelectedItem is Supplier selectedSupplier)
                 {
-                    saveDialog.Filter = "CSV Files (*.csv)|*.csv";
-                    saveDialog.Title = "Export Supplier Ingredients";
-                    saveDialog.FileName = $"{currentSupplier.Name.Replace(" ", "_")}_Ingredients_{DateTime.Now:yyyyMMdd}.csv";
+                    var ingredients = DatabaseContext.GetIngredientsBySupplier(selectedSupplier.Id);
+                    dataGridViewIngredients.DataSource = ingredients;
                     
-                    if (saveDialog.ShowDialog() == DialogResult.OK)
+                    if (dataGridViewIngredients.Columns.Count > 0)
                     {
-                        var importExportService = new ImportExportService();
-                        bool success = importExportService.ExportIngredientsToCsv(supplierIngredients, saveDialog.FileName);
-                        
-                        if (success)
-                        {
-                            MessageBox.Show($"Ingredients exported successfully!\n\n{saveDialog.FileName}", "Export Complete", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
+                        dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.0000";
                     }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error exporting ingredients: {ex.Message}", "Export Error", 
+                MessageBox.Show($"Error loading supplier ingredients: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ExportSupplierIngredientsToCsv()
+        {
+            try
+            {
+                if (cmbSuppliers.SelectedItem is not Supplier selectedSupplier)
+                {
+                    MessageBox.Show("Please select a supplier first.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var ingredients = DatabaseContext.GetIngredientsBySupplier(selectedSupplier.Id);
+                if (ingredients == null || ingredients.Count == 0)
+                {
+                    MessageBox.Show("No ingredients found for this supplier.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                using (var saveDialog = new SaveFileDialog())
+                {
+                    saveDialog.Title = $"Export {selectedSupplier.Name} Ingredients to CSV";
+                    saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+                    saveDialog.FileName = $"{selectedSupplier.Name}_ingredients_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
+                    saveDialog.OverwritePrompt = true;
+                    
+                    if (saveDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        var lines = new List<string>();
+                        // Header
+                        lines.Add("Name,Unit,UnitPrice,Category,SupplierName");
+                        
+                        foreach (var ingredient in ingredients)
+                        {
+                            lines.Add($"\"{ingredient.Name}\",\"{ingredient.Unit}\",{ingredient.UnitPrice:F4},\"{ingredient.Category}\",\"{ingredient.SupplierName}\"");
+                        }
+                        
+                        File.WriteAllLines(saveDialog.FileName, lines);
+                        
+                        MessageBox.Show($"Successfully exported {ingredients.Count} ingredients to CSV.", 
+                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error exporting supplier ingredients: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

@@ -1,3 +1,5 @@
+// [file name]: DatabaseContext.cs
+// [file content begin]
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -91,7 +93,7 @@ namespace CostChef
                 command.ExecuteNonQuery();
             }
 
-            // Insert default settings if they don't exist
+            // Insert default settings if they don't exist - UPDATED WITH EXPORT LOCATION
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = @"
@@ -99,8 +101,8 @@ namespace CostChef
                     ('CurrencySymbol', '$'),
                     ('CurrencyCode', 'USD'),
                     ('DecimalPlaces', '2'),
-                    ('AutoSave', 'true')
-                ";
+                    ('AutoSave', 'true'),
+                    ('ExportLocation', '')";
                 command.ExecuteNonQuery();
             }
 
@@ -116,38 +118,84 @@ namespace CostChef
                 ";
                 command.ExecuteNonQuery();
             }
+
+            // FIX: Ensure we have some default ingredients if the table is empty
+            EnsureDefaultIngredients(connection);
         }
 
-        // NEW: Migration method to add supplier columns to existing ingredients table
+        // NEW: Ensure we have default ingredients
+        private static void EnsureDefaultIngredients(SqliteConnection connection)
+        {
+            try
+            {
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "SELECT COUNT(*) FROM ingredients";
+                    var ingredientCount = Convert.ToInt32(command.ExecuteScalar());
+                    
+                    if (ingredientCount == 0)
+                    {
+                        // Insert a few basic ingredients to prevent errors
+                        using (var insertCommand = connection.CreateCommand())
+                        {
+                            insertCommand.CommandText = @"
+                                INSERT INTO ingredients (name, unit, unit_price) VALUES 
+                                ('Salt', 'gram', 0.03),
+                                ('Sugar', 'gram', 0.08),
+                                ('Flour', 'gram', 0.30),
+                                ('Water', 'ml', 0.01)";
+                            insertCommand.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error ensuring default ingredients: {ex.Message}");
+            }
+        }
+
+        // Migration method to add supplier columns to existing ingredients table
         private static void MigrateIngredientsTable(SqliteConnection connection)
         {
             try
             {
                 // Check if supplier_id column exists
+                bool supplierIdExists = false;
+                bool supplierNameExists = false;
+
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = @"
                         SELECT COUNT(*) FROM pragma_table_info('ingredients') 
                         WHERE name = 'supplier_id'";
-                    var columnExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
+                    supplierIdExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
+                }
 
-                    if (!columnExists)
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = @"
+                        SELECT COUNT(*) FROM pragma_table_info('ingredients') 
+                        WHERE name = 'supplier_name'";
+                    supplierNameExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
+                }
+
+                // Add missing columns
+                if (!supplierIdExists)
+                {
+                    using (var alterCommand = connection.CreateCommand())
                     {
-                        // Add supplier_id column
-                        using (var alterCommand = connection.CreateCommand())
-                        {
-                            alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_id INTEGER";
-                            alterCommand.ExecuteNonQuery();
-                        }
+                        alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_id INTEGER";
+                        alterCommand.ExecuteNonQuery();
+                    }
+                }
 
-                        // Add supplier_name column  
-                        using (var alterCommand = connection.CreateCommand())
-                        {
-                            alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_name TEXT";
-                            alterCommand.ExecuteNonQuery();
-                        }
-
-                        System.Diagnostics.Debug.WriteLine("Successfully migrated ingredients table with supplier columns");
+                if (!supplierNameExists)
+                {
+                    using (var alterCommand = connection.CreateCommand())
+                    {
+                        alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_name TEXT";
+                        alterCommand.ExecuteNonQuery();
                     }
                 }
             }
@@ -301,7 +349,7 @@ namespace CostChef
             }
         }
 
-        // NEW: Get ingredients by supplier
+        // Get ingredients by supplier
         public static List<Ingredient> GetIngredientsBySupplier(int supplierId)
         {
             var ingredients = new List<Ingredient>();
@@ -331,7 +379,7 @@ namespace CostChef
             return ingredients;
         }
 
-        // NEW: Get supplier statistics
+        // Get supplier statistics
         public static List<SupplierStats> GetSupplierStatistics()
         {
             var stats = new List<SupplierStats>();
@@ -368,7 +416,7 @@ namespace CostChef
             return stats;
         }
 
-        // Ingredient methods - UPDATED FOR SUPPLIER SUPPORT
+        // Ingredient methods
         public static List<Ingredient> GetAllIngredients()
         {
             var ingredients = new List<Ingredient>();
@@ -518,7 +566,7 @@ namespace CostChef
             command.ExecuteNonQuery();
         }
 
-        // Recipe methods (unchanged)
+        // Recipe methods
         public static List<Recipe> GetAllRecipes()
         {
             var recipes = new List<Recipe>();
@@ -819,25 +867,5 @@ namespace CostChef
             return categories;
         }
     }
-
-    // NEW: Supplier class
-    public class Supplier
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string ContactPerson { get; set; } = string.Empty;
-        public string Phone { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string Address { get; set; } = string.Empty;
-    }
-
-    // NEW: Supplier statistics class
-    public class SupplierStats
-    {
-        public int SupplierId { get; set; }
-        public string SupplierName { get; set; } = string.Empty;
-        public int IngredientCount { get; set; }
-        public decimal TotalInventoryValue { get; set; }
-        public decimal AveragePrice { get; set; }
-    }
 }
+// [file content end]

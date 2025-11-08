@@ -10,7 +10,7 @@ namespace CostChef
         private Button btnImportExport;
         private Button btnExit;
         private Button btnSettings;
-        private Button btnSupplierManagement; // NEW: Direct supplier management
+        private Button btnSupplierManagement;
         private Button btnSupplierReports;
         private Label lblTitle;
         private Label lblSubtitle;
@@ -30,14 +30,14 @@ namespace CostChef
             this.btnImportExport = new Button();
             this.btnExit = new Button();
             this.btnSettings = new Button();
-            this.btnSupplierManagement = new Button(); // NEW
+            this.btnSupplierManagement = new Button();
             this.btnSupplierReports = new Button();
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
             
             // Main Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(400, 450); // Increased height for new button
+            this.ClientSize = new System.Drawing.Size(400, 450);
             this.Text = "CostChef v1.1 - Simple Menu Costing";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -71,7 +71,7 @@ namespace CostChef
             this.btnRecipes.Text = "🍳 Manage Recipes";
             this.btnRecipes.Click += new EventHandler(this.btnRecipes_Click);
 
-            // NEW: Direct Supplier Management Button
+            // Supplier Management Button
             this.btnSupplierManagement.Location = new System.Drawing.Point(80, 220);
             this.btnSupplierManagement.Size = new System.Drawing.Size(240, 40);
             this.btnSupplierManagement.Text = "🏪 Manage Suppliers";
@@ -111,7 +111,7 @@ namespace CostChef
             this.Controls.Add(this.lblSubtitle);
             this.Controls.Add(this.btnIngredients);
             this.Controls.Add(this.btnRecipes);
-            this.Controls.Add(this.btnSupplierManagement); // NEW
+            this.Controls.Add(this.btnSupplierManagement);
             this.Controls.Add(this.btnImportExport);
             this.Controls.Add(this.btnSupplierReports);
             this.Controls.Add(this.btnExit);
@@ -133,7 +133,6 @@ namespace CostChef
             recipesForm.ShowDialog();
         }
 
-        // NEW: Direct supplier management click handler
         private void btnSupplierManagement_Click(object sender, EventArgs e)
         {
             var supplierManagementForm = new SupplierManagementForm();
@@ -164,44 +163,5 @@ namespace CostChef
                 Application.Exit();
             }
         }
-    }
-
-    // Data classes (keep your existing ones)
-    public class Ingredient
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Unit { get; set; } = string.Empty;
-        public decimal UnitPrice { get; set; }
-        public string Category { get; set; } = string.Empty;
-
-        // Supplier properties
-        public int? SupplierId { get; set; }
-        public string SupplierName { get; set; } = string.Empty;
-    }
-
-    public class Recipe
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string Category { get; set; } = string.Empty;
-        public List<string> Tags { get; set; } = new List<string>();
-        public int BatchYield { get; set; } = 1;
-        public decimal TargetFoodCostPercentage { get; set; } = 0.3m;
-        public List<RecipeIngredient> Ingredients { get; set; } = new List<RecipeIngredient>();
-    }
-
-    public class RecipeIngredient
-    {
-        public int IngredientId { get; set; }
-        public decimal Quantity { get; set; }
-        
-        // Display properties (not stored in database)
-        public string IngredientName { get; set; } = string.Empty;
-        public string Unit { get; set; } = string.Empty;
-        public decimal UnitPrice { get; set; }
-        public decimal LineCost => Quantity * UnitPrice;
-        public string Supplier { get; set; } = string.Empty;
     }
 }

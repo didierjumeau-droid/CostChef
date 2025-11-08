@@ -1,189 +1,242 @@
+//[file name]: SettingsForm.cs
+//[file content begin]
 using System;
-using System.Collections.Generic;
 using System.Windows.Forms;
+using System.IO;
 
 namespace CostChef
 {
     public partial class SettingsForm : Form
     {
-        private ComboBox cmbCurrency;
-        private ComboBox cmbDecimalPlaces;
+        private ComboBox cmbCurrencySymbol;
+        private ComboBox cmbCurrencyCode;
+        private NumericUpDown numDecimalPlaces;
         private CheckBox chkAutoSave;
         private Button btnSave;
         private Button btnCancel;
-        private Label lblTitle;
+        
+        // NEW: Export location controls
+        private Label lblExportLocation;
+        private TextBox txtExportLocation;
+        private Button btnBrowseExportLocation;
+        private Button btnResetExportLocation;
 
         public SettingsForm()
         {
             InitializeComponent();
-            LoadCurrentSettings();
+            LoadSettings();
         }
 
         private void InitializeComponent()
         {
-            this.cmbCurrency = new ComboBox();
-            this.cmbDecimalPlaces = new ComboBox();
+            this.cmbCurrencySymbol = new ComboBox();
+            this.cmbCurrencyCode = new ComboBox();
+            this.numDecimalPlaces = new NumericUpDown();
             this.chkAutoSave = new CheckBox();
             this.btnSave = new Button();
             this.btnCancel = new Button();
-            this.lblTitle = new Label();
+            
+            // NEW: Export location controls
+            this.lblExportLocation = new Label();
+            this.txtExportLocation = new TextBox();
+            this.btnBrowseExportLocation = new Button();
+            this.btnResetExportLocation = new Button();
 
-            // Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(350, 200);
-            this.Text = "CostChef Settings";
+            this.ClientSize = new System.Drawing.Size(450, 280);
+            this.Text = "Settings";
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
 
-            // Title
-            this.lblTitle.Text = "General Settings";
-            this.lblTitle.Location = new System.Drawing.Point(20, 20);
-            this.lblTitle.Size = new System.Drawing.Size(200, 20);
-            this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold);
+            // Currency Symbol
+            var lblCurrencySymbol = new Label { 
+                Text = "Currency Symbol:", 
+                Location = new System.Drawing.Point(20, 20), 
+                AutoSize = true 
+            };
+            
+            this.cmbCurrencySymbol.Location = new System.Drawing.Point(150, 17);
+            this.cmbCurrencySymbol.Size = new System.Drawing.Size(100, 20);
+            this.cmbCurrencySymbol.Items.AddRange(new object[] { "$", "€", "£", "¥", "₹", "₽", "₩", "₺" });
 
-            // Currency
-            var lblCurrency = new Label { 
-                Text = "Currency:", 
+            // Currency Code
+            var lblCurrencyCode = new Label { 
+                Text = "Currency Code:", 
                 Location = new System.Drawing.Point(20, 50), 
                 AutoSize = true 
             };
             
-            this.cmbCurrency.Location = new System.Drawing.Point(120, 47);
-            this.cmbCurrency.Size = new System.Drawing.Size(200, 20);
-            this.cmbCurrency.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cmbCurrency.DropDownWidth = 250;
-            
-            // Expanded currency list
-            var currencies = new Dictionary<string, string>
-            {
-                {"USD", "US Dollar ($)"},
-                {"CAD", "Canadian Dollar (C$)"},
-                {"GBP", "British Pound (£)"},
-                {"EUR", "Euro (€)"},
-                {"AUD", "Australian Dollar (A$)"},
-                {"NZD", "New Zealand Dollar (NZ$)"},
-                {"JPY", "Japanese Yen (¥)"},
-                {"CNY", "Chinese Yuan (¥)"},
-                {"INR", "Indian Rupee (₹)"},
-                {"PHP", "Philippine Peso (₱)"},
-                {"SGD", "Singapore Dollar (S$)"},
-                {"MYR", "Malaysian Ringgit (RM)"},
-                {"THB", "Thai Baht (฿)"},
-                {"IDR", "Indonesian Rupiah (Rp)"},
-                {"ZAR", "South African Rand (R)"},
-                {"BRL", "Brazilian Real (R$)"},
-                {"MXN", "Mexican Peso ($)"},
-                {"SAR", "Saudi Riyal (ر.س)"},
-                {"AED", "UAE Dirham (د.إ)"},
-                {"CHF", "Swiss Franc (CHF)"}
-            };
-            
-            foreach (var currency in currencies)
-            {
-                cmbCurrency.Items.Add($"{currency.Key} - {currency.Value}");
-            }
+            this.cmbCurrencyCode.Location = new System.Drawing.Point(150, 47);
+            this.cmbCurrencyCode.Size = new System.Drawing.Size(100, 20);
+            this.cmbCurrencyCode.Items.AddRange(new object[] { "USD", "EUR", "GBP", "JPY", "INR", "RUB", "KRW", "TRY", "CAD", "AUD" });
 
             // Decimal Places
-            var lblDecimal = new Label { 
+            var lblDecimalPlaces = new Label { 
                 Text = "Decimal Places:", 
                 Location = new System.Drawing.Point(20, 80), 
                 AutoSize = true 
             };
             
-            this.cmbDecimalPlaces.Location = new System.Drawing.Point(120, 77);
-            this.cmbDecimalPlaces.Size = new System.Drawing.Size(80, 20);
-            this.cmbDecimalPlaces.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cmbDecimalPlaces.Items.AddRange(new object[] { "0", "1", "2", "3", "4" });
+            this.numDecimalPlaces.Location = new System.Drawing.Point(150, 77);
+            this.numDecimalPlaces.Size = new System.Drawing.Size(100, 20);
+            this.numDecimalPlaces.Minimum = 0;
+            this.numDecimalPlaces.Maximum = 4;
+            this.numDecimalPlaces.Value = 2;
 
-            // Auto-save
-            this.chkAutoSave.Text = "Auto-save after edits";
+            // Auto Save
             this.chkAutoSave.Location = new System.Drawing.Point(20, 110);
             this.chkAutoSave.Size = new System.Drawing.Size(200, 20);
-            this.chkAutoSave.Checked = true;
+            this.chkAutoSave.Text = "Enable Auto Save";
+
+            // NEW: Export Location
+            this.lblExportLocation.Location = new System.Drawing.Point(20, 140);
+            this.lblExportLocation.Size = new System.Drawing.Size(120, 20);
+            this.lblExportLocation.Text = "Export Location:";
+            this.lblExportLocation.AutoSize = true;
+
+            this.txtExportLocation.Location = new System.Drawing.Point(150, 137);
+            this.txtExportLocation.Size = new System.Drawing.Size(200, 20);
+            this.txtExportLocation.ReadOnly = true;
+
+            this.btnBrowseExportLocation.Location = new System.Drawing.Point(360, 135);
+            this.btnBrowseExportLocation.Size = new System.Drawing.Size(75, 25);
+            this.btnBrowseExportLocation.Text = "Browse...";
+            this.btnBrowseExportLocation.Click += (s, e) => BrowseExportLocation();
+
+            this.btnResetExportLocation.Location = new System.Drawing.Point(150, 165);
+            this.btnResetExportLocation.Size = new System.Drawing.Size(100, 25);
+            this.btnResetExportLocation.Text = "Reset to Default";
+            this.btnResetExportLocation.Click += (s, e) => ResetExportLocation();
 
             // Buttons
-            this.btnSave.Text = "Save Settings";
-            this.btnSave.Location = new System.Drawing.Point(120, 150);
-            this.btnSave.Size = new System.Drawing.Size(100, 30);
+            this.btnSave.Location = new System.Drawing.Point(280, 220);
+            this.btnSave.Size = new System.Drawing.Size(75, 30);
+            this.btnSave.Text = "Save";
             this.btnSave.Click += (s, e) => SaveSettings();
 
+            this.btnCancel.Location = new System.Drawing.Point(365, 220);
+            this.btnCancel.Size = new System.Drawing.Size(75, 30);
             this.btnCancel.Text = "Cancel";
-            this.btnCancel.Location = new System.Drawing.Point(230, 150);
-            this.btnCancel.Size = new System.Drawing.Size(80, 30);
-            this.btnCancel.Click += (s, e) => this.Close();
+            this.btnCancel.Click += (s, e) => this.DialogResult = DialogResult.Cancel;
 
-            // Add controls
             this.Controls.AddRange(new Control[] {
-                lblTitle, lblCurrency, cmbCurrency, lblDecimal, cmbDecimalPlaces,
-                chkAutoSave, btnSave, btnCancel
+                lblCurrencySymbol, cmbCurrencySymbol,
+                lblCurrencyCode, cmbCurrencyCode,
+                lblDecimalPlaces, numDecimalPlaces,
+                chkAutoSave,
+                lblExportLocation, txtExportLocation, btnBrowseExportLocation, btnResetExportLocation,
+                btnSave, btnCancel
             });
 
             this.ResumeLayout(false);
             this.PerformLayout();
         }
 
-        private void LoadCurrentSettings()
+        private void LoadSettings()
         {
-            // Load current settings
-            var currentCurrency = $"{AppSettings.CurrencyCode} - ";
-            var decimalPlaces = AppSettings.DecimalPlaces.ToString();
-            var autoSave = AppSettings.AutoSave;
-
-            // Find and select current currency
-            for (int i = 0; i < cmbCurrency.Items.Count; i++)
+            try
             {
-                if (cmbCurrency.Items[i].ToString().StartsWith(currentCurrency))
+                var settings = DatabaseContext.GetAllSettings();
+                
+                if (settings.ContainsKey("CurrencySymbol"))
+                    cmbCurrencySymbol.Text = settings["CurrencySymbol"];
+                else
+                    cmbCurrencySymbol.SelectedIndex = 0;
+                
+                if (settings.ContainsKey("CurrencyCode"))
+                    cmbCurrencyCode.Text = settings["CurrencyCode"];
+                else
+                    cmbCurrencyCode.SelectedIndex = 0;
+                
+                if (settings.ContainsKey("DecimalPlaces") && int.TryParse(settings["DecimalPlaces"], out int decimalPlaces))
+                    numDecimalPlaces.Value = decimalPlaces;
+                
+                if (settings.ContainsKey("AutoSave"))
+                    chkAutoSave.Checked = settings["AutoSave"] == "true";
+
+                // NEW: Load export location
+                if (settings.ContainsKey("ExportLocation") && !string.IsNullOrEmpty(settings["ExportLocation"]))
                 {
-                    cmbCurrency.SelectedIndex = i;
-                    break;
+                    txtExportLocation.Text = settings["ExportLocation"];
+                }
+                else
+                {
+                    // Set default export location to Documents\CostChef\Exports
+                    string defaultExportPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "CostChef",
+                        "Exports"
+                    );
+                    txtExportLocation.Text = defaultExportPath;
                 }
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading settings: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
-            // Select decimal places
-            cmbDecimalPlaces.SelectedItem = decimalPlaces;
-            chkAutoSave.Checked = autoSave;
+        private void BrowseExportLocation()
+        {
+            using (var folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Select default export location for CSV files";
+                folderDialog.SelectedPath = txtExportLocation.Text;
+                
+                if (folderDialog.ShowDialog() == DialogResult.OK)
+                {
+                    txtExportLocation.Text = folderDialog.SelectedPath;
+                }
+            }
+        }
+
+        private void ResetExportLocation()
+        {
+            string defaultExportPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "CostChef",
+                "Exports"
+            );
+            txtExportLocation.Text = defaultExportPath;
         }
 
         private void SaveSettings()
         {
             try
             {
-                // Parse currency selection
-                if (cmbCurrency.SelectedItem != null)
+                // Validate export location
+                if (!string.IsNullOrEmpty(txtExportLocation.Text))
                 {
-                    var selectedCurrency = cmbCurrency.SelectedItem.ToString();
-                    var parts = selectedCurrency.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length >= 1)
+                    try
                     {
-                        var currencyCode = parts[0];
-                        // Extract symbol from the display text (it's in parentheses)
-                        var symbol = "$"; // default
-                        if (parts.Length > 1 && parts[1].Contains("("))
-                        {
-                            var symbolStart = parts[1].IndexOf('(') + 1;
-                            var symbolEnd = parts[1].IndexOf(')');
-                            if (symbolEnd > symbolStart)
-                            {
-                                symbol = parts[1].Substring(symbolStart, symbolEnd - symbolStart);
-                            }
-                        }
-                        
-                        AppSettings.UpdateCurrency(currencyCode, symbol);
+                        // Test if path is valid
+                        Path.GetFullPath(txtExportLocation.Text);
+                    }
+                    catch (Exception)
+                    {
+                        MessageBox.Show("The export location path is not valid. Please select a valid folder.", 
+                            "Invalid Path", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
                     }
                 }
 
-                // Save other settings
-                if (cmbDecimalPlaces.SelectedItem != null)
-                {
-                    AppSettings.Set("DecimalPlaces", cmbDecimalPlaces.SelectedItem.ToString());
-                }
+                DatabaseContext.SetSetting("CurrencySymbol", cmbCurrencySymbol.Text);
+                DatabaseContext.SetSetting("CurrencyCode", cmbCurrencyCode.Text);
+                DatabaseContext.SetSetting("DecimalPlaces", numDecimalPlaces.Value.ToString());
+                DatabaseContext.SetSetting("AutoSave", chkAutoSave.Checked ? "true" : "false");
                 
-                AppSettings.Set("AutoSave", chkAutoSave.Checked.ToString().ToLower());
+                // NEW: Save export location
+                DatabaseContext.SetSetting("ExportLocation", txtExportLocation.Text);
 
-                MessageBox.Show("Settings saved successfully!\n\nChanges will take effect immediately.", "Settings Saved", 
+                // Update AppSettings
+                AppSettings.LoadSettings();
+                
+                MessageBox.Show("Settings saved successfully!", "Success", 
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 
+                this.DialogResult = DialogResult.OK;
                 this.Close();
             }
             catch (Exception ex)
@@ -194,3 +247,4 @@ namespace CostChef
         }
     }
 }
+// [file content end]

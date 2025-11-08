@@ -11,7 +11,18 @@ namespace CostChef
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             
-            // Show splash screen first
+            // Initialize database BEFORE showing splash screen
+            try
+            {
+                DatabaseContext.InitializeDatabase();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error initializing database: {ex.Message}\n\nThe application will continue but some features may not work properly.", 
+                    "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            
+            // Show splash screen
             using (var splashScreen = new SplashScreenForm())
             {
                 if (splashScreen.ShowDialog() == DialogResult.OK)
