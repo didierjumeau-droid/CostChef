@@ -46,6 +46,9 @@ namespace CostChef
                 command.ExecuteNonQuery();
             }
 
+            // Check if we need to migrate existing ingredients table
+            MigrateIngredientsTable(connection);
+
             // Create recipes table
             using (var command = connection.CreateCommand())
             {
@@ -112,6 +115,45 @@ namespace CostChef
                     ('Quality Meats Ltd', 'Alice Brown', '555-0104')
                 ";
                 command.ExecuteNonQuery();
+            }
+        }
+
+        // NEW: Migration method to add supplier columns to existing ingredients table
+        private static void MigrateIngredientsTable(SqliteConnection connection)
+        {
+            try
+            {
+                // Check if supplier_id column exists
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = @"
+                        SELECT COUNT(*) FROM pragma_table_info('ingredients') 
+                        WHERE name = 'supplier_id'";
+                    var columnExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
+
+                    if (!columnExists)
+                    {
+                        // Add supplier_id column
+                        using (var alterCommand = connection.CreateCommand())
+                        {
+                            alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_id INTEGER";
+                            alterCommand.ExecuteNonQuery();
+                        }
+
+                        // Add supplier_name column  
+                        using (var alterCommand = connection.CreateCommand())
+                        {
+                            alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_name TEXT";
+                            alterCommand.ExecuteNonQuery();
+                        }
+
+                        System.Diagnostics.Debug.WriteLine("Successfully migrated ingredients table with supplier columns");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Migration error: {ex.Message}");
             }
         }
 

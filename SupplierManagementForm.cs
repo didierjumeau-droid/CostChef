@@ -15,6 +15,7 @@ namespace CostChef
         private Button btnClose;
         private TextBox txtSearchSuppliers;
         private Label lblSupplierStats;
+        private Label lblInstructions;
 
         public SupplierManagementForm()
         {
@@ -33,6 +34,7 @@ namespace CostChef
             this.btnClose = new Button();
             this.txtSearchSuppliers = new TextBox();
             this.lblSupplierStats = new Label();
+            this.lblInstructions = new Label();
 
             // Form
             this.SuspendLayout();
@@ -41,19 +43,26 @@ namespace CostChef
             this.StartPosition = FormStartPosition.CenterParent;
             this.MaximizeBox = false;
 
+            // Instructions
+            this.lblInstructions.Text = "Manage your suppliers here. Add suppliers first, then assign them to ingredients.";
+            this.lblInstructions.Location = new System.Drawing.Point(12, 12);
+            this.lblInstructions.Size = new System.Drawing.Size(600, 30);
+            this.lblInstructions.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular);
+            this.lblInstructions.ForeColor = System.Drawing.Color.DarkBlue;
+
             // Search box
-            this.txtSearchSuppliers.Location = new System.Drawing.Point(12, 12);
+            this.txtSearchSuppliers.Location = new System.Drawing.Point(12, 45);
             this.txtSearchSuppliers.Size = new System.Drawing.Size(200, 20);
             this.txtSearchSuppliers.PlaceholderText = "Search suppliers...";
             this.txtSearchSuppliers.TextChanged += (s, e) => LoadSuppliers();
 
             // Stats label
-            this.lblSupplierStats.Location = new System.Drawing.Point(220, 12);
+            this.lblSupplierStats.Location = new System.Drawing.Point(220, 45);
             this.lblSupplierStats.Size = new System.Drawing.Size(400, 20);
             this.lblSupplierStats.Text = "Total: 0 suppliers";
 
             // DataGrid
-            this.dataGridViewSuppliers.Location = new System.Drawing.Point(12, 40);
+            this.dataGridViewSuppliers.Location = new System.Drawing.Point(12, 75);
             this.dataGridViewSuppliers.Size = new System.Drawing.Size(776, 350);
             this.dataGridViewSuppliers.ReadOnly = true;
             this.dataGridViewSuppliers.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -62,33 +71,35 @@ namespace CostChef
             this.dataGridViewSuppliers.CellDoubleClick += (s, e) => EditSelectedSupplier();
 
             // Buttons
-            this.btnAddSupplier.Location = new System.Drawing.Point(12, 400);
-            this.btnAddSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnAddSupplier.Text = "Add Supplier";
+            this.btnAddSupplier.Location = new System.Drawing.Point(12, 435);
+            this.btnAddSupplier.Size = new System.Drawing.Size(120, 30);
+            this.btnAddSupplier.Text = "➕ Add Supplier";
+            this.btnAddSupplier.BackColor = System.Drawing.Color.LightGreen;
             this.btnAddSupplier.Click += (s, e) => AddSupplier();
 
-            this.btnEditSupplier.Location = new System.Drawing.Point(122, 400);
-            this.btnEditSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnEditSupplier.Text = "Edit Supplier";
+            this.btnEditSupplier.Location = new System.Drawing.Point(142, 435);
+            this.btnEditSupplier.Size = new System.Drawing.Size(120, 30);
+            this.btnEditSupplier.Text = "✏️ Edit Supplier";
             this.btnEditSupplier.Click += (s, e) => EditSelectedSupplier();
 
-            this.btnDeleteSupplier.Location = new System.Drawing.Point(232, 400);
-            this.btnDeleteSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnDeleteSupplier.Text = "Delete Supplier";
+            this.btnDeleteSupplier.Location = new System.Drawing.Point(272, 435);
+            this.btnDeleteSupplier.Size = new System.Drawing.Size(120, 30);
+            this.btnDeleteSupplier.Text = "🗑️ Delete Supplier";
+            this.btnDeleteSupplier.BackColor = System.Drawing.Color.LightCoral;
             this.btnDeleteSupplier.Click += (s, e) => DeleteSupplier();
 
-            this.btnViewIngredients.Location = new System.Drawing.Point(342, 400);
-            this.btnViewIngredients.Size = new System.Drawing.Size(120, 30);
-            this.btnViewIngredients.Text = "View Ingredients";
+            this.btnViewIngredients.Location = new System.Drawing.Point(402, 435);
+            this.btnViewIngredients.Size = new System.Drawing.Size(140, 30);
+            this.btnViewIngredients.Text = "📦 View Ingredients";
             this.btnViewIngredients.Click += (s, e) => ViewSupplierIngredients();
 
-            this.btnClose.Location = new System.Drawing.Point(708, 400);
+            this.btnClose.Location = new System.Drawing.Point(708, 435);
             this.btnClose.Size = new System.Drawing.Size(80, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
 
             this.Controls.AddRange(new Control[] {
-                txtSearchSuppliers, lblSupplierStats, dataGridViewSuppliers,
+                lblInstructions, txtSearchSuppliers, lblSupplierStats, dataGridViewSuppliers,
                 btnAddSupplier, btnEditSupplier, btnDeleteSupplier, btnViewIngredients, btnClose
             });
 
@@ -121,6 +132,11 @@ namespace CostChef
                     dataGridViewSuppliers.Columns["Phone"].HeaderText = "Phone";
                     dataGridViewSuppliers.Columns["Email"].HeaderText = "Email";
                     dataGridViewSuppliers.Columns["Address"].HeaderText = "Address";
+
+                    // Auto-size columns for better display
+                    dataGridViewSuppliers.Columns["Name"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                    dataGridViewSuppliers.Columns["ContactPerson"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                    dataGridViewSuppliers.Columns["Phone"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
                 }
             }
             catch (Exception ex)
@@ -155,6 +171,8 @@ namespace CostChef
                 {
                     LoadSuppliers();
                     LoadSupplierStatistics();
+                    MessageBox.Show("Supplier added successfully!\n\nYou can now assign this supplier to ingredients in the Manage Ingredients screen.", 
+                        "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
         }
@@ -186,13 +204,26 @@ namespace CostChef
             {
                 var supplier = (Supplier)dataGridViewSuppliers.SelectedRows[0].DataBoundItem;
                 
-                var result = MessageBox.Show(
-                    $"Are you sure you want to delete '{supplier.Name}'?\n\nThis will remove the supplier association from all ingredients but won't delete the ingredients themselves.",
+                // Check if supplier has ingredients
+                var supplierIngredients = DatabaseContext.GetIngredientsBySupplier(supplier.Id);
+                if (supplierIngredients.Count > 0)
+                {
+                    var result = MessageBox.Show(
+                        $"Cannot delete '{supplier.Name}' because it has {supplierIngredients.Count} ingredients assigned.\n\n" +
+                        "Please reassign or remove these ingredients first, or the supplier association will be removed from all ingredients.",
+                        "Cannot Delete Supplier", 
+                        MessageBoxButtons.OK, 
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+                
+                var result2 = MessageBox.Show(
+                    $"Are you sure you want to delete '{supplier.Name}'?",
                     "Confirm Delete", 
                     MessageBoxButtons.YesNo, 
                     MessageBoxIcon.Question);
 
-                if (result == DialogResult.Yes)
+                if (result2 == DialogResult.Yes)
                 {
                     try
                     {

@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Forms;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace CostChef
 {
@@ -17,6 +18,7 @@ namespace CostChef
         private ComboBox cmbSupplierFilter;
 
         private string currencySymbol => AppSettings.CurrencySymbol;
+        private List<Ingredient> _currentIngredients = new List<Ingredient>();
 
         public IngredientsForm()
         {
@@ -38,7 +40,7 @@ namespace CostChef
             this.cmbSupplierFilter = new ComboBox();
 
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(800, 400);
+            this.ClientSize = new System.Drawing.Size(800, 450);
             this.Text = "Manage Ingredients";
             this.StartPosition = FormStartPosition.CenterParent;
             this.MaximizeBox = false;
@@ -59,35 +61,36 @@ namespace CostChef
             this.lblCount.Text = "Total: 0 ingredients";
 
             this.dataGridView.Location = new System.Drawing.Point(12, 40);
-            this.dataGridView.Size = new System.Drawing.Size(776, 300);
+            this.dataGridView.Size = new System.Drawing.Size(776, 350);
             this.dataGridView.ReadOnly = false;
             this.dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.dataGridView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             this.dataGridView.RowHeadersVisible = false;
             this.dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             this.dataGridView.DataError += DataGridView_DataError;
+            this.dataGridView.AllowUserToAddRows = false;
 
-            this.btnAdd.Location = new System.Drawing.Point(12, 350);
+            this.btnAdd.Location = new System.Drawing.Point(12, 400);
             this.btnAdd.Size = new System.Drawing.Size(80, 30);
             this.btnAdd.Text = "Add";
             this.btnAdd.Click += (s, e) => AddIngredient();
 
-            this.btnEdit.Location = new System.Drawing.Point(102, 350);
+            this.btnEdit.Location = new System.Drawing.Point(102, 400);
             this.btnEdit.Size = new System.Drawing.Size(80, 30);
             this.btnEdit.Text = "Edit Price";
             this.btnEdit.Click += (s, e) => EditSelectedIngredientPrice();
 
-            this.btnDelete.Location = new System.Drawing.Point(192, 350);
+            this.btnDelete.Location = new System.Drawing.Point(192, 400);
             this.btnDelete.Size = new System.Drawing.Size(80, 30);
             this.btnDelete.Text = "Delete";
             this.btnDelete.Click += (s, e) => DeleteIngredient();
 
-            this.btnManageSuppliers.Location = new System.Drawing.Point(282, 350);
+            this.btnManageSuppliers.Location = new System.Drawing.Point(282, 400);
             this.btnManageSuppliers.Size = new System.Drawing.Size(100, 30);
             this.btnManageSuppliers.Text = "Suppliers";
             this.btnManageSuppliers.Click += (s, e) => ManageSuppliers();
 
-            this.btnClose.Location = new System.Drawing.Point(708, 350);
+            this.btnClose.Location = new System.Drawing.Point(708, 400);
             this.btnClose.Size = new System.Drawing.Size(80, 30);
             this.btnClose.Text = "Close";
             this.btnClose.Click += (s, e) => this.Close();
@@ -133,12 +136,22 @@ namespace CostChef
                     MessageBoxIcon.Error);
                 e.ThrowException = false;
             }
+            else
+            {
+                MessageBox.Show($"Data error: {e.Exception.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                e.ThrowException = false;
+            }
         }
 
         private void LoadIngredients()
         {
             try
             {
+                // Suspend layout to prevent reentrant calls
+                dataGridView.SuspendLayout();
+                dataGridView.DataSource = null;
+
                 var searchTerm = txtSearch.Text.ToLower();
                 var allIngredients = DatabaseContext.GetAllIngredients();
                 
@@ -160,15 +173,28 @@ namespace CostChef
                     .OrderBy(i => i.Name)
                     .ToList();
 
-                dataGridView.SuspendLayout();
-                dataGridView.DataSource = null;
-                dataGridView.DataSource = filteredIngredients;
+                // Store current ingredients for reference
+                _currentIngredients = filteredIngredients;
+
+                // Create a DataTable for safer binding
+                var table = new System.Data.DataTable();
+                table.Columns.Add("Id", typeof(int));
+                table.Columns.Add("Name", typeof(string));
+                table.Columns.Add("Unit", typeof(string));
+                table.Columns.Add("UnitPrice", typeof(decimal));
+                table.Columns.Add("SupplierName", typeof(string));
+
+                foreach (var ingredient in filteredIngredients)
+                {
+                    table.Rows.Add(ingredient.Id, ingredient.Name, ingredient.Unit, ingredient.UnitPrice, ingredient.SupplierName);
+                }
+
+                dataGridView.DataSource = table;
                 
+                // Configure columns after data binding
                 if (dataGridView.Columns.Count > 0)
                 {
                     dataGridView.Columns["Id"].Visible = false;
-                    dataGridView.Columns["Category"].Visible = false;
-                    dataGridView.Columns["SupplierId"].Visible = false;
                     
                     dataGridView.Columns["UnitPrice"].DefaultCellStyle.Format = "0.00";
                     dataGridView.Columns["UnitPrice"].HeaderText = $"Price/Unit ({currencySymbol})";
@@ -185,6 +211,9 @@ namespace CostChef
                     dataGridView.Columns["Unit"].DisplayIndex = 1;
                     dataGridView.Columns["UnitPrice"].DisplayIndex = 2;
                     dataGridView.Columns["SupplierName"].DisplayIndex = 3;
+
+                    // Make supplier column a dropdown
+                    ConfigureSupplierColumn();
                 }
                 
                 dataGridView.ResumeLayout();
@@ -192,64 +221,108 @@ namespace CostChef
             }
             catch (Exception ex)
             {
+                dataGridView.ResumeLayout();
                 MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
+        private void ConfigureSupplierColumn()
+        {
+            var supplierColumn = dataGridView.Columns["SupplierName"];
+            if (supplierColumn != null)
+            {
+                // Create a combo box column for suppliers
+                var comboColumn = new DataGridViewComboBoxColumn();
+                comboColumn.HeaderText = "Supplier";
+                comboColumn.DataPropertyName = "SupplierName";
+                comboColumn.Name = "SupplierName";
+                comboColumn.FlatStyle = FlatStyle.Flat;
+                
+                // Add supplier options
+                comboColumn.Items.Add(""); // Empty option
+                var suppliers = DatabaseContext.GetAllSuppliers();
+                foreach (var supplier in suppliers)
+                {
+                    comboColumn.Items.Add(supplier.Name);
+                }
+
+                // Replace the textbox column with combobox column
+                int columnIndex = supplierColumn.Index;
+                dataGridView.Columns.Remove(supplierColumn);
+                dataGridView.Columns.Insert(columnIndex, comboColumn);
+                comboColumn.DisplayIndex = 3;
+            }
+        }
+
         private void DataGridView_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0)
+            if (e.RowIndex >= 0 && e.RowIndex < dataGridView.Rows.Count)
             {
                 try
                 {
-                    var ingredient = (Ingredient)dataGridView.Rows[e.RowIndex].DataBoundItem;
+                    var row = dataGridView.Rows[e.RowIndex];
+                    int ingredientId = (int)row.Cells["Id"].Value;
+                    var ingredient = _currentIngredients.FirstOrDefault(i => i.Id == ingredientId);
                     
-                    if (e.ColumnIndex == dataGridView.Columns["UnitPrice"].Index)
+                    if (ingredient != null)
                     {
-                        if (dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value != null && 
-                            decimal.TryParse(dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value.ToString(), 
-                            out decimal newPrice))
+                        if (e.ColumnIndex == dataGridView.Columns["UnitPrice"].Index)
                         {
-                            ingredient.UnitPrice = newPrice;
+                            if (row.Cells[e.ColumnIndex].Value != null && 
+                                decimal.TryParse(row.Cells[e.ColumnIndex].Value.ToString(), out decimal newPrice))
+                            {
+                                ingredient.UnitPrice = newPrice;
+                                DatabaseContext.UpdateIngredient(ingredient);
+                                
+                                // Refresh the display
+                                dataGridView.InvalidateRow(e.RowIndex);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Please enter a valid numeric price (without currency symbol).\n\nExample: 0.85 instead of $0.85", "Invalid Price Format", 
+                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                // Restore original value
+                                row.Cells[e.ColumnIndex].Value = ingredient.UnitPrice;
+                            }
+                        }
+                        else if (dataGridView.Columns[e.ColumnIndex] is DataGridViewComboBoxColumn)
+                        {
+                            var newSupplierName = row.Cells[e.ColumnIndex].Value?.ToString() ?? "";
+                            ingredient.SupplierName = newSupplierName;
+                            
+                            // Try to find supplier ID
+                            var supplier = DatabaseContext.GetSupplierByName(newSupplierName);
+                            if (supplier != null)
+                            {
+                                ingredient.SupplierId = supplier.Id;
+                            }
+                            else
+                            {
+                                ingredient.SupplierId = null;
+                            }
+                            
                             DatabaseContext.UpdateIngredient(ingredient);
-                            dataGridView.InvalidateRow(e.RowIndex);
+                            
+                            // Show confirmation
+                            if (!string.IsNullOrEmpty(newSupplierName))
+                            {
+                                MessageBox.Show($"Supplier updated to: {newSupplierName}", "Supplier Updated", 
+                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Supplier removed from ingredient", "Supplier Updated", 
+                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
                         }
-                        else
-                        {
-                            MessageBox.Show("Please enter a valid numeric price (without currency symbol).\n\nExample: 0.85 instead of RM0.85", "Invalid Price Format", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            dataGridView.CancelEdit();
-                            dataGridView.InvalidateRow(e.RowIndex);
-                        }
-                    }
-                    else if (e.ColumnIndex == dataGridView.Columns["SupplierName"].Index)
-                    {
-                        var newSupplierName = dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString() ?? "";
-                        ingredient.SupplierName = newSupplierName;
-                        
-                        // Try to find supplier ID
-                        var supplier = DatabaseContext.GetSupplierByName(newSupplierName);
-                        if (supplier != null)
-                        {
-                            ingredient.SupplierId = supplier.Id;
-                        }
-                        else
-                        {
-                            ingredient.SupplierId = null;
-                        }
-                        
-                        DatabaseContext.UpdateIngredient(ingredient);
-                        dataGridView.InvalidateRow(e.RowIndex);
-                        
-                        MessageBox.Show($"Supplier updated to: {newSupplierName}", "Supplier Updated", 
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error updating ingredient: {ex.Message}", "Error", 
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    LoadIngredients(); // Reload to reset any inconsistent state
                 }
             }
         }
@@ -268,140 +341,145 @@ namespace CostChef
         {
             if (dataGridView.SelectedRows.Count > 0)
             {
-                var ingredient = (Ingredient)dataGridView.SelectedRows[0].DataBoundItem;
+                var selectedRow = dataGridView.SelectedRows[0];
+                int ingredientId = (int)selectedRow.Cells["Id"].Value;
+                var ingredient = _currentIngredients.FirstOrDefault(i => i.Id == ingredientId);
                 
-                using (var form = new Form())
+                if (ingredient != null)
                 {
-                    form.Text = $"Update Price - {ingredient.Name}";
-                    form.Size = new System.Drawing.Size(400, 350);
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.FormBorderStyle = FormBorderStyle.FixedDialog;
-                    form.MaximizeBox = false;
-                    
-                    var lblCurrent = new Label { 
-                        Text = $"Current: {currencySymbol} {ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
-                        Location = new System.Drawing.Point(20, 20), 
-                        AutoSize = true 
-                    };
-                    
-                    var grpReceipt = new GroupBox();
-                    grpReceipt.Text = "Receipt Information (Optional)";
-                    grpReceipt.Location = new System.Drawing.Point(20, 50);
-                    grpReceipt.Size = new System.Drawing.Size(350, 120);
-                    
-                    var lblShopPrice = new Label { 
-                        Text = $"Shop Price ({currencySymbol}):", 
-                        Location = new System.Drawing.Point(15, 25), 
-                        AutoSize = true 
-                    };
-                    var txtShopPrice = new TextBox { 
-                        Text = "", 
-                        Location = new System.Drawing.Point(120, 22), 
-                        Size = new System.Drawing.Size(100, 20),
-                        PlaceholderText = "175.00"
-                    };
-                    
-                    var lblQuantityBought = new Label { 
-                        Text = "Quantity Bought:", 
-                        Location = new System.Drawing.Point(15, 55), 
-                        AutoSize = true 
-                    };
-                    var txtQuantityBought = new TextBox { 
-                        Text = "", 
-                        Location = new System.Drawing.Point(120, 52), 
-                        Size = new System.Drawing.Size(100, 20),
-                        PlaceholderText = "200"
-                    };
-                    
-                    var lblBoughtUnit = new Label { 
-                        Text = "Unit:", 
-                        Location = new System.Drawing.Point(15, 85), 
-                        AutoSize = true 
-                    };
-                    var txtBoughtUnit = new TextBox { 
-                        Text = ingredient.Unit,
-                        Location = new System.Drawing.Point(120, 82), 
-                        Size = new System.Drawing.Size(100, 20),
-                        PlaceholderText = "g, kg, ml, etc."
-                    };
-                    
-                    var btnCalculate = new Button { 
-                        Text = "Calculate", 
-                        Location = new System.Drawing.Point(230, 50), 
-                        Size = new System.Drawing.Size(80, 25)
-                    };
-                    
-                    grpReceipt.Controls.AddRange(new Control[] {
-                        lblShopPrice, txtShopPrice, lblQuantityBought, txtQuantityBought,
-                        lblBoughtUnit, txtBoughtUnit, btnCalculate
-                    });
-                    
-                    var lblCalculated = new Label { 
-                        Text = "Calculated unit price will appear here", 
-                        Location = new System.Drawing.Point(20, 180), 
-                        Size = new System.Drawing.Size(350, 20),
-                        TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                        BorderStyle = BorderStyle.FixedSingle,
-                        BackColor = System.Drawing.Color.LightYellow
-                    };
-                    
-                    var lblNew = new Label { 
-                        Text = "New Unit Price:", 
-                        Location = new System.Drawing.Point(20, 210), 
-                        AutoSize = true 
-                    };
-                    var txtNewPrice = new TextBox { 
-                        Text = ingredient.UnitPrice.ToString("0.00"), 
-                        Location = new System.Drawing.Point(120, 207), 
-                        Size = new System.Drawing.Size(100, 20) 
-                    };
-                    
-                    var btnUpdate = new Button { 
-                        Text = "Update", 
-                        DialogResult = DialogResult.OK, 
-                        Location = new System.Drawing.Point(120, 240),
-                        Size = new System.Drawing.Size(80, 30)
-                    };
-                    var btnCancel = new Button { 
-                        Text = "Cancel", 
-                        DialogResult = DialogResult.Cancel, 
-                        Location = new System.Drawing.Point(210, 240),
-                        Size = new System.Drawing.Size(80, 30)
-                    };
-                    
-                    btnCalculate.Click += (s, e) =>
+                    using (var form = new Form())
                     {
-                        if (decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
-                            decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
-                            quantity > 0)
+                        form.Text = $"Update Price - {ingredient.Name}";
+                        form.Size = new System.Drawing.Size(400, 350);
+                        form.StartPosition = FormStartPosition.CenterParent;
+                        form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                        form.MaximizeBox = false;
+                        
+                        var lblCurrent = new Label { 
+                            Text = $"Current: {currencySymbol} {ingredient.UnitPrice:0.00} per {ingredient.Unit}", 
+                            Location = new System.Drawing.Point(20, 20), 
+                            AutoSize = true 
+                        };
+                        
+                        var grpReceipt = new GroupBox();
+                        grpReceipt.Text = "Receipt Information (Optional)";
+                        grpReceipt.Location = new System.Drawing.Point(20, 50);
+                        grpReceipt.Size = new System.Drawing.Size(350, 120);
+                        
+                        var lblShopPrice = new Label { 
+                            Text = $"Shop Price ({currencySymbol}):", 
+                            Location = new System.Drawing.Point(15, 25), 
+                            AutoSize = true 
+                        };
+                        var txtShopPrice = new TextBox { 
+                            Text = "", 
+                            Location = new System.Drawing.Point(120, 22), 
+                            Size = new System.Drawing.Size(100, 20),
+                            PlaceholderText = "175.00"
+                        };
+                        
+                        var lblQuantityBought = new Label { 
+                            Text = "Quantity Bought:", 
+                            Location = new System.Drawing.Point(15, 55), 
+                            AutoSize = true 
+                        };
+                        var txtQuantityBought = new TextBox { 
+                            Text = "", 
+                            Location = new System.Drawing.Point(120, 52), 
+                            Size = new System.Drawing.Size(100, 20),
+                            PlaceholderText = "200"
+                        };
+                        
+                        var lblBoughtUnit = new Label { 
+                            Text = "Unit:", 
+                            Location = new System.Drawing.Point(15, 85), 
+                            AutoSize = true 
+                        };
+                        var txtBoughtUnit = new TextBox { 
+                            Text = ingredient.Unit,
+                            Location = new System.Drawing.Point(120, 82), 
+                            Size = new System.Drawing.Size(100, 20),
+                            PlaceholderText = "g, kg, ml, etc."
+                        };
+                        
+                        var btnCalculate = new Button { 
+                            Text = "Calculate", 
+                            Location = new System.Drawing.Point(230, 50), 
+                            Size = new System.Drawing.Size(80, 25)
+                        };
+                        
+                        grpReceipt.Controls.AddRange(new Control[] {
+                            lblShopPrice, txtShopPrice, lblQuantityBought, txtQuantityBought,
+                            lblBoughtUnit, txtBoughtUnit, btnCalculate
+                        });
+                        
+                        var lblCalculated = new Label { 
+                            Text = "Calculated unit price will appear here", 
+                            Location = new System.Drawing.Point(20, 180), 
+                            Size = new System.Drawing.Size(350, 20),
+                            TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                            BorderStyle = BorderStyle.FixedSingle,
+                            BackColor = System.Drawing.Color.LightYellow
+                        };
+                        
+                        var lblNew = new Label { 
+                            Text = "New Unit Price:", 
+                            Location = new System.Drawing.Point(20, 210), 
+                            AutoSize = true 
+                        };
+                        var txtNewPrice = new TextBox { 
+                            Text = ingredient.UnitPrice.ToString("0.00"), 
+                            Location = new System.Drawing.Point(120, 207), 
+                            Size = new System.Drawing.Size(100, 20) 
+                        };
+                        
+                        var btnUpdate = new Button { 
+                            Text = "Update", 
+                            DialogResult = DialogResult.OK, 
+                            Location = new System.Drawing.Point(120, 240),
+                            Size = new System.Drawing.Size(80, 30)
+                        };
+                        var btnCancel = new Button { 
+                            Text = "Cancel", 
+                            DialogResult = DialogResult.Cancel, 
+                            Location = new System.Drawing.Point(210, 240),
+                            Size = new System.Drawing.Size(80, 30)
+                        };
+                        
+                        btnCalculate.Click += (s, e) =>
                         {
-                            decimal calculatedUnitPrice = shopPrice / quantity;
-                            txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
-                            lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
-                            lblCalculated.BackColor = System.Drawing.Color.LightGreen;
-                        }
-                        else
+                            if (decimal.TryParse(txtShopPrice.Text, out decimal shopPrice) && 
+                                decimal.TryParse(txtQuantityBought.Text, out decimal quantity) && 
+                                quantity > 0)
+                            {
+                                decimal calculatedUnitPrice = shopPrice / quantity;
+                                txtNewPrice.Text = calculatedUnitPrice.ToString("0.00");
+                                lblCalculated.Text = $"Calculated: {currencySymbol} {shopPrice:0.00} ÷ {quantity} {txtBoughtUnit.Text} = {currencySymbol} {calculatedUnitPrice:0.00} per {ingredient.Unit}";
+                                lblCalculated.BackColor = System.Drawing.Color.LightGreen;
+                            }
+                            else
+                            {
+                                lblCalculated.Text = "Please enter valid numbers for shop price and quantity";
+                                lblCalculated.BackColor = System.Drawing.Color.LightCoral;
+                            }
+                        };
+                        
+                        form.Controls.AddRange(new Control[] {
+                            lblCurrent, grpReceipt, lblCalculated, lblNew, txtNewPrice, btnUpdate, btnCancel
+                        });
+                        
+                        form.AcceptButton = btnUpdate;
+                        form.CancelButton = btnCancel;
+                        
+                        if (form.ShowDialog() == DialogResult.OK && 
+                            decimal.TryParse(txtNewPrice.Text, out decimal newPrice))
                         {
-                            lblCalculated.Text = "Please enter valid numbers for shop price and quantity";
-                            lblCalculated.BackColor = System.Drawing.Color.LightCoral;
+                            ingredient.UnitPrice = newPrice;
+                            DatabaseContext.UpdateIngredient(ingredient);
+                            LoadIngredients(); // Reload to refresh display
+                            MessageBox.Show($"Price updated to {currencySymbol} {newPrice:0.00} per {ingredient.Unit}!", "Success", 
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
-                    };
-                    
-                    form.Controls.AddRange(new Control[] {
-                        lblCurrent, grpReceipt, lblCalculated, lblNew, txtNewPrice, btnUpdate, btnCancel
-                    });
-                    
-                    form.AcceptButton = btnUpdate;
-                    form.CancelButton = btnCancel;
-                    
-                    if (form.ShowDialog() == DialogResult.OK && 
-                        decimal.TryParse(txtNewPrice.Text, out decimal newPrice))
-                    {
-                        ingredient.UnitPrice = newPrice;
-                        DatabaseContext.UpdateIngredient(ingredient);
-                        dataGridView.Invalidate();
-                        MessageBox.Show($"Price updated to {currencySymbol} {newPrice:0.00} per {ingredient.Unit}!", "Success", 
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
             }
@@ -430,17 +508,18 @@ namespace CostChef
                 var txtPrice = new TextBox { Text = "0", Location = new System.Drawing.Point(120, 77), Size = new System.Drawing.Size(150, 20) };
                 
                 var lblSupplier = new Label { Text = "Supplier:", Location = new System.Drawing.Point(20, 110), AutoSize = true };
-                var cmbSupplier = new ComboBox { Location = new System.Drawing.Point(120, 107), Size = new System.Drawing.Size(150, 20), DropDownStyle = ComboBoxStyle.DropDown };
+                var cmbSupplier = new ComboBox { Location = new System.Drawing.Point(120, 107), Size = new System.Drawing.Size(150, 20), DropDownStyle = ComboBoxStyle.DropDownList };
                 
                 // Load suppliers into combo box
                 try
                 {
                     var suppliers = DatabaseContext.GetAllSuppliers();
-                    cmbSupplier.Items.Add(""); // Empty option
+                    cmbSupplier.Items.Add(""); // Empty option for no supplier
                     foreach (var supplier in suppliers)
                     {
                         cmbSupplier.Items.Add(supplier.Name);
                     }
+                    cmbSupplier.SelectedIndex = 0;
                 }
                 catch (Exception ex)
                 {
@@ -464,28 +543,36 @@ namespace CostChef
                     !string.IsNullOrWhiteSpace(txtUnit.Text) &&
                     decimal.TryParse(txtPrice.Text, out decimal price))
                 {
-                    var newIngredient = new Ingredient
+                    try
                     {
-                        Name = txtName.Text,
-                        Unit = txtUnit.Text,
-                        UnitPrice = price,
-                        SupplierName = cmbSupplier.Text
-                    };
-                    
-                    // Set supplier ID if available
-                    if (!string.IsNullOrEmpty(cmbSupplier.Text))
-                    {
-                        var supplier = DatabaseContext.GetSupplierByName(cmbSupplier.Text);
-                        if (supplier != null)
+                        var newIngredient = new Ingredient
                         {
-                            newIngredient.SupplierId = supplier.Id;
+                            Name = txtName.Text.Trim(),
+                            Unit = txtUnit.Text.Trim(),
+                            UnitPrice = price,
+                            SupplierName = cmbSupplier.SelectedItem?.ToString() ?? ""
+                        };
+                        
+                        // Set supplier ID if available
+                        if (!string.IsNullOrEmpty(newIngredient.SupplierName))
+                        {
+                            var supplier = DatabaseContext.GetSupplierByName(newIngredient.SupplierName);
+                            if (supplier != null)
+                            {
+                                newIngredient.SupplierId = supplier.Id;
+                            }
                         }
+                        
+                        DatabaseContext.InsertIngredient(newIngredient);
+                        LoadIngredients();
+                        MessageBox.Show("Ingredient added successfully!", "Success", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
-                    
-                    DatabaseContext.InsertIngredient(newIngredient);
-                    LoadIngredients();
-                    MessageBox.Show("Ingredient added successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error adding ingredient: {ex.Message}", "Error", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 }
             }
         }
@@ -494,16 +581,30 @@ namespace CostChef
         {
             if (dataGridView.SelectedRows.Count > 0)
             {
-                var ingredient = (Ingredient)dataGridView.SelectedRows[0].DataBoundItem;
-                var result = MessageBox.Show($"Delete {ingredient.Name}?", "Confirm Delete", 
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-                if (result == DialogResult.Yes)
+                var selectedRow = dataGridView.SelectedRows[0];
+                int ingredientId = (int)selectedRow.Cells["Id"].Value;
+                var ingredient = _currentIngredients.FirstOrDefault(i => i.Id == ingredientId);
+                
+                if (ingredient != null)
                 {
-                    DatabaseContext.DeleteIngredient(ingredient.Id);
-                    LoadIngredients();
-                    MessageBox.Show("Ingredient deleted successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    var result = MessageBox.Show($"Delete {ingredient.Name}?", "Confirm Delete", 
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            DatabaseContext.DeleteIngredient(ingredient.Id);
+                            LoadIngredients();
+                            MessageBox.Show("Ingredient deleted successfully!", "Success", 
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error deleting ingredient: {ex.Message}", "Error", 
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
                 }
             }
             else

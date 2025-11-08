@@ -10,7 +10,8 @@ namespace CostChef
         private Button btnImportExport;
         private Button btnExit;
         private Button btnSettings;
-        private Button btnSupplierReports; // NEW: Supplier Reports button
+        private Button btnSupplierManagement; // NEW: Direct supplier management
+        private Button btnSupplierReports;
         private Label lblTitle;
         private Label lblSubtitle;
 
@@ -29,13 +30,14 @@ namespace CostChef
             this.btnImportExport = new Button();
             this.btnExit = new Button();
             this.btnSettings = new Button();
-            this.btnSupplierReports = new Button(); // NEW
+            this.btnSupplierManagement = new Button(); // NEW
+            this.btnSupplierReports = new Button();
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
             
             // Main Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(400, 400); // Increased height for new button
+            this.ClientSize = new System.Drawing.Size(400, 450); // Increased height for new button
             this.Text = "CostChef v1.1 - Simple Menu Costing";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -69,20 +71,26 @@ namespace CostChef
             this.btnRecipes.Text = "🍳 Manage Recipes";
             this.btnRecipes.Click += new EventHandler(this.btnRecipes_Click);
 
+            // NEW: Direct Supplier Management Button
+            this.btnSupplierManagement.Location = new System.Drawing.Point(80, 220);
+            this.btnSupplierManagement.Size = new System.Drawing.Size(240, 40);
+            this.btnSupplierManagement.Text = "🏪 Manage Suppliers";
+            this.btnSupplierManagement.Click += new EventHandler(this.btnSupplierManagement_Click);
+
             // btnImportExport
-            this.btnImportExport.Location = new System.Drawing.Point(80, 220);
+            this.btnImportExport.Location = new System.Drawing.Point(80, 270);
             this.btnImportExport.Size = new System.Drawing.Size(240, 40);
             this.btnImportExport.Text = "📤 Import/Export Data";
             this.btnImportExport.Click += new EventHandler(this.btnImportExport_Click);
 
-            // NEW: Supplier Reports Button
-            this.btnSupplierReports.Location = new System.Drawing.Point(80, 270);
+            // btnSupplierReports
+            this.btnSupplierReports.Location = new System.Drawing.Point(80, 320);
             this.btnSupplierReports.Size = new System.Drawing.Size(240, 40);
-            this.btnSupplierReports.Text = "🏪 Supplier Reports";
+            this.btnSupplierReports.Text = "📊 Supplier Reports";
             this.btnSupplierReports.Click += new EventHandler(this.btnSupplierReports_Click);
             
             // btnExit
-            this.btnExit.Location = new System.Drawing.Point(80, 320);
+            this.btnExit.Location = new System.Drawing.Point(80, 370);
             this.btnExit.Size = new System.Drawing.Size(240, 40);
             this.btnExit.Text = "Exit";
             this.btnExit.Click += new EventHandler(this.btnExit_Click);
@@ -103,26 +111,14 @@ namespace CostChef
             this.Controls.Add(this.lblSubtitle);
             this.Controls.Add(this.btnIngredients);
             this.Controls.Add(this.btnRecipes);
+            this.Controls.Add(this.btnSupplierManagement); // NEW
             this.Controls.Add(this.btnImportExport);
-            this.Controls.Add(this.btnSupplierReports); // NEW
+            this.Controls.Add(this.btnSupplierReports);
             this.Controls.Add(this.btnExit);
             this.Controls.Add(this.btnSettings);
             
             this.ResumeLayout(false);
             this.PerformLayout();
-
-            // TEMPORARY: Add restore button (you can remove this later)
-            var btnRestore = new Button();
-            btnRestore.Location = new System.Drawing.Point(350, 320);
-            btnRestore.Size = new System.Drawing.Size(30, 30);
-            btnRestore.Text = "♻";
-            btnRestore.Font = new System.Drawing.Font("Segoe UI Emoji", 10F);
-            btnRestore.Click += (s, e) => 
-            {
-                var restoreForm = new RestoreIngredientsForm();
-                restoreForm.ShowDialog();
-            };
-            this.Controls.Add(btnRestore);
         }
 
         private void btnIngredients_Click(object sender, EventArgs e)
@@ -137,13 +133,19 @@ namespace CostChef
             recipesForm.ShowDialog();
         }
 
+        // NEW: Direct supplier management click handler
+        private void btnSupplierManagement_Click(object sender, EventArgs e)
+        {
+            var supplierManagementForm = new SupplierManagementForm();
+            supplierManagementForm.ShowDialog();
+        }
+
         private void btnImportExport_Click(object sender, EventArgs e)
         {
             var importExportForm = new ImportExportForm();
             importExportForm.ShowDialog();
         }
 
-        // NEW: Supplier Reports click handler
         private void btnSupplierReports_Click(object sender, EventArgs e)
         {
             var supplierReportsForm = new SupplierReportsForm();
@@ -164,7 +166,7 @@ namespace CostChef
         }
     }
 
-    // Data classes
+    // Data classes (keep your existing ones)
     public class Ingredient
     {
         public int Id { get; set; }
@@ -200,6 +202,6 @@ namespace CostChef
         public string Unit { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public decimal LineCost => Quantity * UnitPrice;
-        public string Supplier { get; set; } = string.Empty; // ADD THIS LINE
+        public string Supplier { get; set; } = string.Empty;
     }
 }
