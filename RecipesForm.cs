@@ -380,57 +380,6 @@ namespace CostChef
             this.Text = $"Recipe Costing Calculator - {totalRecipes} recipes, {currentIngredientCount} ingredients in current recipe";
         }
 
-        // ENHANCED: Search recipes by name, description, ingredients, categories, or tags
-        private void SearchRecipes()
-        {
-            try
-            {
-                var searchTerm = txtSearchRecipes.Text.Trim().ToLower();
-                
-                if (string.IsNullOrEmpty(searchTerm))
-                {
-                    LoadExistingRecipes();
-                    return;
-                }
-
-                var allRecipes = DatabaseContext.GetAllRecipes();
-                var filteredRecipes = allRecipes
-                    .Where(recipe =>
-                        recipe.Name.ToLower().Contains(searchTerm) ||
-                        recipe.Description.ToLower().Contains(searchTerm) ||
-                        recipe.Category.ToLower().Contains(searchTerm) ||
-                        (recipe.Tags != null && recipe.Tags.Any(tag => 
-                            tag.ToLower().Contains(searchTerm))) ||
-                        (recipe.Ingredients != null && recipe.Ingredients.Any(i => 
-                            i.IngredientName.ToLower().Contains(searchTerm)))
-                    )
-                    .OrderBy(r => r.Name)
-                    .ToList();
-
-                cmbExistingRecipes.DataSource = null;
-                cmbExistingRecipes.Items.Clear();
-                
-                if (filteredRecipes.Count > 0)
-                {
-                    cmbExistingRecipes.DataSource = filteredRecipes;
-                    cmbExistingRecipes.DisplayMember = "Name";
-                    cmbExistingRecipes.ValueMember = "Id";
-                    
-                    lblExistingRecipes.Text = $"Search Results ({filteredRecipes.Count} recipes):";
-                }
-                else
-                {
-                    cmbExistingRecipes.Text = "No recipes found";
-                    lblExistingRecipes.Text = "Search Results (0 recipes):";
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error searching recipes: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void ClearSearch()
         {
             txtSearchRecipes.Text = "";
@@ -438,16 +387,15 @@ namespace CostChef
             lblExistingRecipes.Text = "Load Recipe:";
         }
 
-        // NEW: Load categories into combo box
         private void LoadCategories()
         {
             try
             {
-                var categories = DatabaseContext.GetRecipeCategories();
+                // Clear existing items
                 cmbCategory.Items.Clear();
                 cmbCategory.Items.Add(""); // Empty option
                 
-                // Add common categories
+                // Add common categories first (these should always be available)
                 var commonCategories = new List<string>
                 {
                     "Main Course", "Appetizer", "Dessert", "Side Dish", 
@@ -461,8 +409,9 @@ namespace CostChef
                         cmbCategory.Items.Add(category);
                 }
                 
-                // Add existing categories from database
-                foreach (var category in categories)
+                // Then add any additional categories from the database
+                var recipeCategories = DatabaseContext.GetRecipeCategories();
+                foreach (var category in recipeCategories)
                 {
                     if (!string.IsNullOrEmpty(category) && !cmbCategory.Items.Contains(category))
                         cmbCategory.Items.Add(category);
@@ -475,18 +424,22 @@ namespace CostChef
             }
         }
 
-        // NEW: Update recipe tags from textbox
         private void UpdateRecipeTags()
         {
+            if (string.IsNullOrEmpty(txtTags.Text))
+            {
+                currentRecipe.Tags = "";
+                return;
+            }
+
             var tags = txtTags.Text.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim())
                 .Where(t => !string.IsNullOrEmpty(t))
                 .ToList();
             
-            currentRecipe.Tags = tags;
+            currentRecipe.Tags = string.Join(",", tags);
         }
 
-        // NEW: Category management form
         private void ShowCategoryManager()
         {
             using (var form = new Form())
@@ -522,15 +475,34 @@ namespace CostChef
                 btnClose.Text = "Close";
                 btnClose.DialogResult = DialogResult.OK;
 
-                // Load existing categories
+                // Define default categories that cannot be deleted
+                var defaultCategories = new List<string>
+                {
+                    "Main Course", "Appetizer", "Dessert", "Side Dish", 
+                    "Breakfast", "Lunch", "Dinner", "Beverage",
+                    "Soup", "Salad", "Snack", "Sauce"
+                };
+
+                // Load all categories (default + custom from database)
                 try
                 {
-                    var categories = DatabaseContext.GetRecipeCategories();
-                    lstCategories.Items.Clear();
-                    foreach (var category in categories)
+                    var allCategories = new List<string>();
+                    
+                    // Add default categories
+                    allCategories.AddRange(defaultCategories);
+                    
+                    // Add custom categories from database
+                    var customCategories = DatabaseContext.GetRecipeCategories();
+                    foreach (var category in customCategories)
                     {
-                        if (!string.IsNullOrEmpty(category))
-                            lstCategories.Items.Add(category);
+                        if (!string.IsNullOrEmpty(category) && !allCategories.Contains(category))
+                            allCategories.Add(category);
+                    }
+                    
+                    lstCategories.Items.Clear();
+                    foreach (var category in allCategories.OrderBy(c => c))
+                    {
+                        lstCategories.Items.Add(category);
                     }
                 }
                 catch (Exception ex)
@@ -544,14 +516,19 @@ namespace CostChef
                     var newCategory = txtNewCategory.Text.Trim();
                     if (!string.IsNullOrEmpty(newCategory))
                     {
-                        if (!lstCategories.Items.Contains(newCategory))
+                        // Check if category already exists (case-insensitive)
+                        if (!lstCategories.Items.Cast<string>().Any(c => 
+                            c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
                         {
                             lstCategories.Items.Add(newCategory);
                             txtNewCategory.Text = "";
                             
-                            // Update the main form's category list
-                            if (!cmbCategory.Items.Contains(newCategory))
+                            // Also add to the main form's category list immediately
+                            if (!cmbCategory.Items.Cast<string>().Any(c => 
+                                c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
+                            {
                                 cmbCategory.Items.Add(newCategory);
+                            }
                         }
                         else
                         {
@@ -566,12 +543,29 @@ namespace CostChef
                     if (lstCategories.SelectedItem != null)
                     {
                         var selected = lstCategories.SelectedItem.ToString();
+                        
+                        // Check if it's a default category (cannot be deleted)
+                        if (defaultCategories.Contains(selected))
+                        {
+                            MessageBox.Show($"Cannot delete default category '{selected}'.", "Information", 
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
+                        
                         var result = MessageBox.Show($"Delete category '{selected}'?\n\nNote: This won't remove the category from existing recipes.", 
                             "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                         
                         if (result == DialogResult.Yes)
                         {
                             lstCategories.Items.Remove(selected);
+                            
+                            // Also remove from main form's category list if it exists
+                            var itemToRemove = cmbCategory.Items.Cast<string>()
+                                .FirstOrDefault(c => c.Equals(selected, StringComparison.OrdinalIgnoreCase));
+                            if (itemToRemove != null)
+                            {
+                                cmbCategory.Items.Remove(itemToRemove);
+                            }
                         }
                     }
                 };
@@ -589,7 +583,55 @@ namespace CostChef
             }
         }
 
-        // UPDATED: Load selected recipe with categories and tags
+        private void SearchRecipes()
+        {
+            try
+            {
+                var searchTerm = txtSearchRecipes.Text.Trim().ToLowerInvariant();
+                
+                if (string.IsNullOrEmpty(searchTerm))
+                {
+                    LoadExistingRecipes();
+                    return;
+                }
+
+                var allRecipes = DatabaseContext.GetAllRecipes();
+                var filteredRecipes = allRecipes
+                    .Where(recipe =>
+                        (recipe.Name ?? "").ToLowerInvariant().Contains(searchTerm) ||
+                        (recipe.Description ?? "").ToLowerInvariant().Contains(searchTerm) ||
+                        (recipe.Category ?? "").ToLowerInvariant().Contains(searchTerm) ||
+                        ((recipe.Tags ?? "").ToLowerInvariant().Contains(searchTerm)) ||
+                        (recipe.Ingredients != null && recipe.Ingredients.Any(i => 
+                            (i.IngredientName ?? "").ToLowerInvariant().Contains(searchTerm)))
+                    )
+                    .OrderBy(r => r.Name)
+                    .ToList();
+
+                cmbExistingRecipes.DataSource = null;
+                cmbExistingRecipes.Items.Clear();
+                
+                if (filteredRecipes.Count > 0)
+                {
+                    cmbExistingRecipes.DataSource = filteredRecipes;
+                    cmbExistingRecipes.DisplayMember = "Name";
+                    cmbExistingRecipes.ValueMember = "Id";
+                    
+                    lblExistingRecipes.Text = $"Search Results ({filteredRecipes.Count} recipes):";
+                }
+                else
+                {
+                    cmbExistingRecipes.Text = "No recipes found";
+                    lblExistingRecipes.Text = "Search Results (0 recipes):";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error searching recipes: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void LoadSelectedRecipe()
         {
             try
@@ -597,7 +639,9 @@ namespace CostChef
                 if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
                 {
                     currentRecipe = selectedRecipe;
-                    currentIngredients = selectedRecipe.Ingredients ?? new List<RecipeIngredient>();
+                    
+                    // Load recipe ingredients from database
+                    currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
 
                     txtRecipeName.Text = currentRecipe.Name ?? "Unnamed Recipe";
                     txtBatchYield.Text = currentRecipe.BatchYield.ToString();
@@ -605,8 +649,15 @@ namespace CostChef
                     // Load category
                     cmbCategory.Text = currentRecipe.Category ?? "";
                     
-                    // Load tags
-                    txtTags.Text = string.Join(", ", currentRecipe.Tags ?? new List<string>());
+                    // Load tags - convert from comma-separated string to display format
+                    if (!string.IsNullOrEmpty(currentRecipe.Tags))
+                    {
+                        txtTags.Text = currentRecipe.Tags.Replace(",", ", ");
+                    }
+                    else
+                    {
+                        txtTags.Text = "";
+                    }
                     
                     var foodCostPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("0");
                     var matchingItem = cmbFoodCost.Items.Cast<string>()
@@ -621,7 +672,7 @@ namespace CostChef
                     
                     // Show category and tags in status
                     var categoryInfo = string.IsNullOrEmpty(currentRecipe.Category) ? "" : $" | Category: {currentRecipe.Category}";
-                    var tagsInfo = currentRecipe.Tags.Count > 0 ? $" | Tags: {string.Join(", ", currentRecipe.Tags)}" : "";
+                    var tagsInfo = !string.IsNullOrEmpty(currentRecipe.Tags) ? $" | Tags: {currentRecipe.Tags}" : "";
                     
                     MessageBox.Show($"Loaded recipe: {currentRecipe.Name}{categoryInfo}{tagsInfo}", "Success", 
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -662,13 +713,12 @@ namespace CostChef
             }
         }
 
-        // UPDATED: Initialize new recipe with empty category and tags
         private void InitializeNewRecipe()
         {
             currentRecipe = new Recipe { 
                 Name = "New Recipe", 
                 Category = "",
-                Tags = new List<string>(),
+                Tags = "",
                 BatchYield = 1, 
                 TargetFoodCostPercentage = 0.3m 
             };
@@ -691,7 +741,7 @@ namespace CostChef
                     IngredientName = selectedIngredient.Name,
                     Unit = selectedIngredient.Unit,
                     UnitPrice = selectedIngredient.UnitPrice,
-                    Supplier = selectedIngredient.SupplierName // NEW: Include supplier info
+                    Supplier = selectedIngredient.SupplierName
                 };
 
                 currentIngredients.Add(recipeIngredient);
@@ -730,19 +780,25 @@ namespace CostChef
                 
                 if (dataGridViewIngredients.Columns.Count > 0)
                 {
-                    dataGridViewIngredients.Columns["LineCost"].DefaultCellStyle.Format = $"{currencySymbol}0.00";
-                    dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{currencySymbol}0.0000";
-                    dataGridViewIngredients.Columns["IngredientId"].Visible = false;
-                    
-                    // NEW: Ensure Supplier column is properly displayed
-                    if (dataGridViewIngredients.Columns.Contains("Supplier"))
-                    {
-                        dataGridViewIngredients.Columns["Supplier"].HeaderText = "Supplier";
-                    }
-                    
+                    // Format currency columns
                     foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
                     {
-                        column.ReadOnly = (column.HeaderText != "Quantity");
+                        if (column.Name == "LineCost" || column.DataPropertyName == "LineCost")
+                            column.DefaultCellStyle.Format = $"{currencySymbol}0.00";
+                        if (column.Name == "UnitPrice" || column.DataPropertyName == "UnitPrice")
+                            column.DefaultCellStyle.Format = $"{currencySymbol}0.0000";
+                    }
+                    
+                    // Hide ID column
+                    var idColumn = dataGridViewIngredients.Columns.Cast<DataGridViewColumn>()
+                        .FirstOrDefault(c => c.Name == "IngredientId" || c.DataPropertyName == "IngredientId");
+                    if (idColumn != null)
+                        idColumn.Visible = false;
+                    
+                    // Make only Quantity column editable
+                    foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
+                    {
+                        column.ReadOnly = (column.Name != "Quantity" && column.DataPropertyName != "Quantity");
                     }
                 }
                 dataGridViewIngredients.ResumeLayout();
@@ -763,12 +819,13 @@ namespace CostChef
             }
 
             decimal totalCost = currentIngredients.Sum(i => i.LineCost);
-            decimal costPerServing = totalCost / currentRecipe.BatchYield;
+            decimal costPerServing = currentRecipe.BatchYield > 0 ? totalCost / currentRecipe.BatchYield : totalCost;
             
-            decimal suggestedPrice25 = Math.Round((costPerServing / 0.25m) / 5, 0) * 5;
-            decimal suggestedPrice30 = Math.Round((costPerServing / 0.30m) / 5, 0) * 5;
-            decimal suggestedPrice35 = Math.Round((costPerServing / 0.35m) / 5, 0) * 5;
-            decimal targetPrice = Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5;
+            decimal suggestedPrice25 = costPerServing > 0 ? Math.Round((costPerServing / 0.25m) / 5, 0) * 5 : 0;
+            decimal suggestedPrice30 = costPerServing > 0 ? Math.Round((costPerServing / 0.30m) / 5, 0) * 5 : 0;
+            decimal suggestedPrice35 = costPerServing > 0 ? Math.Round((costPerServing / 0.35m) / 5, 0) * 5 : 0;
+            decimal targetPrice = costPerServing > 0 && currentRecipe.TargetFoodCostPercentage > 0 ? 
+                Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5 : 0;
 
             string summary = $@"Recipe: {currentRecipe.Name}
 Total Cost: {currencySymbol}{totalCost:F2} | Cost per Serving: {currencySymbol}{costPerServing:F2}
@@ -778,97 +835,143 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
             lblCostSummary.Text = summary;
         }
 
-        // UPDATED: Save recipe with category and tags
-        private void SaveRecipe()
+     private void SaveRecipe()
+{
+    if (string.IsNullOrWhiteSpace(currentRecipe.Name))
+    {
+        MessageBox.Show("Please enter a recipe name.", "Error", 
+            MessageBoxButtons.OK, MessageBoxIcon.Error);
+        return;
+    }
+
+    try
+    {
+        bool isNewRecipe = (currentRecipe.Id == 0);
+        
+        if (!isNewRecipe)
         {
-            if (string.IsNullOrWhiteSpace(currentRecipe.Name))
-            {
-                MessageBox.Show("Please enter a recipe name.", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
+            // Recipe is being modified - ask user what they want to do
+            var result = MessageBox.Show(
+                $"Recipe '{currentRecipe.Name}' already exists.\n\n" +
+                "What would you like to do?\n\n" +
+                "• 'Yes' - Overwrite the existing recipe\n" +
+                "• 'No' - Save as a new recipe with a different name\n" +
+                "• 'Cancel' - Go back and make changes",
+                "Save Recipe Options",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button3); // Default to Cancel for safety
 
-            currentRecipe.Ingredients = currentIngredients ?? new List<RecipeIngredient>();
-
-            try
+            switch (result)
             {
-                bool isNewRecipe = (currentRecipe.Id == 0);
-                
-                if (isNewRecipe)
-                {
-                    currentRecipe.Id = DatabaseContext.InsertRecipe(currentRecipe);
-                    MessageBox.Show($"Recipe '{currentRecipe.Name}' saved successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
+                case DialogResult.Yes:
+                    // Overwrite existing recipe
                     DatabaseContext.UpdateRecipe(currentRecipe);
                     MessageBox.Show($"Recipe '{currentRecipe.Name}' updated successfully!", "Success", 
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                
-                // Add new category to available categories if it doesn't exist
-                if (!string.IsNullOrEmpty(currentRecipe.Category) && 
-                    !cmbCategory.Items.Contains(currentRecipe.Category))
-                {
-                    cmbCategory.Items.Add(currentRecipe.Category);
-                }
-                
-                LoadExistingRecipes();
-                
-                if (allRecipes != null)
-                {
-                    var savedRecipe = allRecipes.FirstOrDefault(r => r.Id == currentRecipe.Id);
-                    if (savedRecipe != null)
+                    break;
+                    
+                case DialogResult.No:
+                    // Save as new recipe - prompt for new name
+                    using (var nameDialog = new Form())
                     {
-                        cmbExistingRecipes.SelectedItem = savedRecipe;
+                        nameDialog.Text = "Save As New Recipe";
+                        nameDialog.Size = new System.Drawing.Size(350, 150);
+                        nameDialog.StartPosition = FormStartPosition.CenterParent;
+                        nameDialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                        nameDialog.MaximizeBox = false;
+                        
+                        var lblNewName = new Label { Text = "New Recipe Name:", Location = new System.Drawing.Point(20, 20), Size = new System.Drawing.Size(100, 20) };
+                        var txtNewName = new TextBox { Text = $"{currentRecipe.Name} (Copy)", Location = new System.Drawing.Point(120, 17), Size = new System.Drawing.Size(200, 20) };
+                        var btnOk = new Button { Text = "OK", Location = new System.Drawing.Point(120, 50), Size = new System.Drawing.Size(75, 30), DialogResult = DialogResult.OK };
+                        var btnCancel = new Button { Text = "Cancel", Location = new System.Drawing.Point(205, 50), Size = new System.Drawing.Size(75, 30), DialogResult = DialogResult.Cancel };
+                        
+                        nameDialog.Controls.AddRange(new Control[] { lblNewName, txtNewName, btnOk, btnCancel });
+                        nameDialog.AcceptButton = btnOk;
+                        nameDialog.CancelButton = btnCancel;
+                        
+                        if (nameDialog.ShowDialog() == DialogResult.OK)
+                        {
+                            var newName = txtNewName.Text.Trim();
+                            if (!string.IsNullOrEmpty(newName))
+                            {
+                                // Create a copy of the current recipe with new name and ID
+                                var newRecipe = new Recipe
+                                {
+                                    Name = newName,
+                                    Description = currentRecipe.Description,
+                                    Category = currentRecipe.Category,
+                                    Tags = currentRecipe.Tags,
+                                    BatchYield = currentRecipe.BatchYield,
+                                    TargetFoodCostPercentage = currentRecipe.TargetFoodCostPercentage
+                                };
+                                
+                                // Save the new recipe
+                                DatabaseContext.InsertRecipe(newRecipe);
+                                
+                                // Now save all the ingredients for the new recipe
+                                foreach (var ingredient in currentIngredients)
+                                {
+                                    var newRecipeIngredient = new RecipeIngredient
+                                    {
+                                        RecipeId = newRecipe.Id,
+                                        IngredientId = ingredient.IngredientId,
+                                        Quantity = ingredient.Quantity
+                                    };
+                                    DatabaseContext.AddRecipeIngredient(newRecipeIngredient);
+                                }
+                                
+                                // Update the current recipe to the new one
+                                currentRecipe = newRecipe;
+                                currentRecipe.Id = newRecipe.Id; // Update the ID
+                                
+                                MessageBox.Show($"Recipe '{newRecipe.Name}' saved successfully as a new recipe!", "Success", 
+                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            else
+                            {
+                                MessageBox.Show("Please enter a valid recipe name.", "Error", 
+                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            return; // User cancelled the name dialog
+                        }
                     }
-                }
-                
-                UpdateRecipeCountDisplay();
-                RecipesUpdated?.Invoke();
-                
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    break;
+                    
+                case DialogResult.Cancel:
+                    return; // User cancelled the operation
             }
         }
-
-        private void DeleteRecipe()
+        else
         {
-            if (currentRecipe.Id == 0)
-            {
-                MessageBox.Show("No recipe loaded to delete.", "Information", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var result = MessageBox.Show($"Are you sure you want to delete '{currentRecipe.Name}'?", 
-                "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                try
-                {
-                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
-                    MessageBox.Show("Recipe deleted successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    
-                    LoadExistingRecipes();
-                    InitializeNewRecipe();
-                    
-                    UpdateRecipeCountDisplay();
-                    RecipesUpdated?.Invoke();
-                    
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error deleting recipe: {ex.Message}", "Error", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+            // This is a brand new recipe
+            DatabaseContext.InsertRecipe(currentRecipe);
+            MessageBox.Show($"Recipe '{currentRecipe.Name}' saved successfully!", "Success", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
+        
+        // Add new category to available categories if it doesn't exist
+        if (!string.IsNullOrEmpty(currentRecipe.Category) && 
+            !cmbCategory.Items.Cast<string>().Any(c => 
+                c.Equals(currentRecipe.Category, StringComparison.OrdinalIgnoreCase)))
+        {
+            cmbCategory.Items.Add(currentRecipe.Category);
+        }
+        
+        LoadExistingRecipes();
+        UpdateRecipeCountDisplay();
+        RecipesUpdated?.Invoke();
+        
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
+            MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 }
+        }
+    }

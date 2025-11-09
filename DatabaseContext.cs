@@ -1,962 +1,636 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
-using Microsoft.Data.Sqlite;
+using System.Data.SQLite;
+using System.IO;
+using System.Linq;
 
 namespace CostChef
 {
     public static class DatabaseContext
     {
-        private static string ConnectionString => "Data Source=costchef.db";
+        private static string _connectionString = "Data Source=costchef.db;Version=3;";
 
         public static void InitializeDatabase()
         {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-
-            // Create suppliers table FIRST
-            using (var command = connection.CreateCommand())
+            if (!File.Exists("costchef.db"))
             {
-                command.CommandText = @"
-                    CREATE TABLE IF NOT EXISTS suppliers (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
-                        contact_person TEXT,
-                        phone TEXT,
-                        email TEXT,
-                        address TEXT
-                    )";
-                command.ExecuteNonQuery();
+                SQLiteConnection.CreateFile("costchef.db");
             }
 
-            // Create ingredients table WITH SUPPLIER SUPPORT
-            using (var command = connection.CreateCommand())
+            using (var connection = new SQLiteConnection(_connectionString))
             {
-                command.CommandText = @"
+                connection.Open();
+
+                // Create ingredients table
+                string createIngredientsTable = @"
                     CREATE TABLE IF NOT EXISTS ingredients (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
+                        name TEXT NOT NULL,
                         unit TEXT NOT NULL,
-                        unit_price DECIMAL(10,4) NOT NULL,
+                        unit_price REAL NOT NULL,
                         category TEXT,
-                        supplier_id INTEGER,
-                        supplier_name TEXT,
-                        FOREIGN KEY (supplier_id) REFERENCES suppliers (id) ON DELETE SET NULL
+                        supplier_id INTEGER
                     )";
-                command.ExecuteNonQuery();
-            }
 
-            // Check if we need to migrate existing ingredients table
-            MigrateIngredientsTable(connection);
-
-            // Create recipes table
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = @"
+                // Create recipes table
+                string createRecipesTable = @"
                     CREATE TABLE IF NOT EXISTS recipes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL,
                         description TEXT,
                         category TEXT,
                         tags TEXT,
-                        batch_yield INTEGER NOT NULL DEFAULT 1,
-                        target_food_cost_percentage DECIMAL(5,4) NOT NULL DEFAULT 0.3
+                        batch_yield INTEGER DEFAULT 1,
+                        target_food_cost_percentage REAL DEFAULT 30.0
                     )";
-                command.ExecuteNonQuery();
-            }
 
-            // Create recipe_ingredients table
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = @"
+                // Create recipe_ingredients table
+                string createRecipeIngredientsTable = @"
                     CREATE TABLE IF NOT EXISTS recipe_ingredients (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         recipe_id INTEGER NOT NULL,
                         ingredient_id INTEGER NOT NULL,
-                        quantity DECIMAL(10,4) NOT NULL,
-                        FOREIGN KEY (recipe_id) REFERENCES recipes (id) ON DELETE CASCADE,
-                        FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE
+                        quantity REAL NOT NULL,
+                        FOREIGN KEY (recipe_id) REFERENCES recipes (id),
+                        FOREIGN KEY (ingredient_id) REFERENCES ingredients (id)
                     )";
-                command.ExecuteNonQuery();
-            }
 
-            // Create settings table
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = @"
+                // Create suppliers table
+                string createSuppliersTable = @"
+                    CREATE TABLE IF NOT EXISTS suppliers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        contact_person TEXT,
+                        phone TEXT,
+                        email TEXT,
+                        address TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )";
+
+                // Create settings table
+                string createSettingsTable = @"
                     CREATE TABLE IF NOT EXISTS settings (
                         key TEXT PRIMARY KEY,
-                        value TEXT NOT NULL
+                        value TEXT
                     )";
-                command.ExecuteNonQuery();
-            }
 
-            // Insert default settings if they don't exist - UPDATED WITH EXPORT LOCATION
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = @"
-                    INSERT OR IGNORE INTO settings (key, value) VALUES 
-                    ('CurrencySymbol', '$'),
-                    ('CurrencyCode', 'USD'),
-                    ('DecimalPlaces', '2'),
-                    ('AutoSave', 'true'),
-                    ('ExportLocation', '')";
-                command.ExecuteNonQuery();
-            }
-
-            // Insert default suppliers if they don't exist
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = @"
-                    INSERT OR IGNORE INTO suppliers (name, contact_person, phone) VALUES 
-                    ('Local Market', 'John Doe', '555-0101'),
-                    ('Wholesale Foods Inc', 'Jane Smith', '555-0102'),
-                    ('Fresh Produce Co', 'Bob Wilson', '555-0103'),
-                    ('Quality Meats Ltd', 'Alice Brown', '555-0104')
-                ";
-                command.ExecuteNonQuery();
-            }
-
-            // FIX: Ensure we have some default ingredients if the table is empty
-            EnsureDefaultIngredients(connection);
-        }
-
-        // NEW: Ensure we have default ingredients
-        private static void EnsureDefaultIngredients(SqliteConnection connection)
-        {
-            try
-            {
-                using (var command = connection.CreateCommand())
+                using (var command = new SQLiteCommand(connection))
                 {
-                    command.CommandText = "SELECT COUNT(*) FROM ingredients";
-                    var ingredientCount = Convert.ToInt32(command.ExecuteScalar());
-                    
-                    if (ingredientCount == 0)
-                    {
-                        // Insert a few basic ingredients to prevent errors
-                        using (var insertCommand = connection.CreateCommand())
-                        {
-                            insertCommand.CommandText = @"
-                                INSERT INTO ingredients (name, unit, unit_price) VALUES 
-                                ('Salt', 'gram', 0.03),
-                                ('Sugar', 'gram', 0.08),
-                                ('Flour', 'gram', 0.30),
-                                ('Water', 'ml', 0.01)";
-                            insertCommand.ExecuteNonQuery();
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error ensuring default ingredients: {ex.Message}");
-            }
-        }
+                    command.CommandText = createIngredientsTable;
+                    command.ExecuteNonQuery();
 
-        // Migration method to add supplier columns to existing ingredients table
-        private static void MigrateIngredientsTable(SqliteConnection connection)
-        {
-            try
-            {
-                // Check if supplier_id column exists
-                bool supplierIdExists = false;
-                bool supplierNameExists = false;
+                    command.CommandText = createRecipesTable;
+                    command.ExecuteNonQuery();
 
-                using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = @"
-                        SELECT COUNT(*) FROM pragma_table_info('ingredients') 
-                        WHERE name = 'supplier_id'";
-                    supplierIdExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
-                }
+                    command.CommandText = createRecipeIngredientsTable;
+                    command.ExecuteNonQuery();
 
-                using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = @"
-                        SELECT COUNT(*) FROM pragma_table_info('ingredients') 
-                        WHERE name = 'supplier_name'";
-                    supplierNameExists = Convert.ToInt32(command.ExecuteScalar()) > 0;
-                }
+                    command.CommandText = createSuppliersTable;
+                    command.ExecuteNonQuery();
 
-                // Add missing columns
-                if (!supplierIdExists)
-                {
-                    using (var alterCommand = connection.CreateCommand())
-                    {
-                        alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_id INTEGER";
-                        alterCommand.ExecuteNonQuery();
-                    }
-                }
-
-                if (!supplierNameExists)
-                {
-                    using (var alterCommand = connection.CreateCommand())
-                    {
-                        alterCommand.CommandText = "ALTER TABLE ingredients ADD COLUMN supplier_name TEXT";
-                        alterCommand.ExecuteNonQuery();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Migration error: {ex.Message}");
-            }
-        }
-
-        // SUPPLIER METHODS
-        public static List<Supplier> GetAllSuppliers()
-        {
-            var suppliers = new List<Supplier>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM suppliers ORDER BY name";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                suppliers.Add(new Supplier
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
-                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
-                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
-                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
-                });
-            }
-            
-            return suppliers;
-        }
-
-        public static Supplier GetSupplierById(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM suppliers WHERE id = @id";
-            command.Parameters.AddWithValue("@id", id);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                return new Supplier
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
-                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
-                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
-                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
-                };
-            }
-            
-            return null;
-        }
-
-        public static Supplier GetSupplierByName(string name)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM suppliers WHERE name = @name";
-            command.Parameters.AddWithValue("@name", name);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                return new Supplier
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    ContactPerson = reader.IsDBNull("contact_person") ? "" : reader.GetString("contact_person"),
-                    Phone = reader.IsDBNull("phone") ? "" : reader.GetString("phone"),
-                    Email = reader.IsDBNull("email") ? "" : reader.GetString("email"),
-                    Address = reader.IsDBNull("address") ? "" : reader.GetString("address")
-                };
-            }
-            
-            return null;
-        }
-
-        public static int InsertSupplier(Supplier supplier)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                INSERT INTO suppliers (name, contact_person, phone, email, address) 
-                VALUES (@name, @contact_person, @phone, @email, @address);
-                SELECT last_insert_rowid();";
-            
-            command.Parameters.AddWithValue("@name", supplier.Name);
-            command.Parameters.AddWithValue("@contact_person", (object)supplier.ContactPerson ?? DBNull.Value);
-            command.Parameters.AddWithValue("@phone", (object)supplier.Phone ?? DBNull.Value);
-            command.Parameters.AddWithValue("@email", (object)supplier.Email ?? DBNull.Value);
-            command.Parameters.AddWithValue("@address", (object)supplier.Address ?? DBNull.Value);
-            
-            return Convert.ToInt32(command.ExecuteScalar());
-        }
-
-        public static void UpdateSupplier(Supplier supplier)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                UPDATE suppliers 
-                SET name = @name, contact_person = @contact_person, phone = @phone, 
-                    email = @email, address = @address 
-                WHERE id = @id";
-            
-            command.Parameters.AddWithValue("@id", supplier.Id);
-            command.Parameters.AddWithValue("@name", supplier.Name);
-            command.Parameters.AddWithValue("@contact_person", (object)supplier.ContactPerson ?? DBNull.Value);
-            command.Parameters.AddWithValue("@phone", (object)supplier.Phone ?? DBNull.Value);
-            command.Parameters.AddWithValue("@email", (object)supplier.Email ?? DBNull.Value);
-            command.Parameters.AddWithValue("@address", (object)supplier.Address ?? DBNull.Value);
-            
-            command.ExecuteNonQuery();
-        }
-
-        public static void DeleteSupplier(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            // First, remove supplier references from ingredients
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "UPDATE ingredients SET supplier_id = NULL, supplier_name = NULL WHERE supplier_id = @id";
-                command.Parameters.AddWithValue("@id", id);
-                command.ExecuteNonQuery();
-            }
-            
-            // Then delete the supplier
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "DELETE FROM suppliers WHERE id = @id";
-                command.Parameters.AddWithValue("@id", id);
-                command.ExecuteNonQuery();
-            }
-        }
-
-        // Get ingredients by supplier
-        public static List<Ingredient> GetIngredientsBySupplier(int supplierId)
-        {
-            var ingredients = new List<Ingredient>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM ingredients WHERE supplier_id = @supplierId ORDER BY name";
-            command.Parameters.AddWithValue("@supplierId", supplierId);
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                ingredients.Add(new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
-                });
-            }
-            
-            return ingredients;
-        }
-
-        // Get supplier statistics
-        public static List<SupplierStats> GetSupplierStatistics()
-        {
-            var stats = new List<SupplierStats>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT 
-                    s.id,
-                    s.name,
-                    COUNT(i.id) as ingredient_count,
-                    COALESCE(SUM(i.unit_price), 0) as total_inventory_value,
-                    COALESCE(AVG(i.unit_price), 0) as average_price
-                FROM suppliers s
-                LEFT JOIN ingredients i ON s.id = i.supplier_id
-                GROUP BY s.id, s.name
-                ORDER BY ingredient_count DESC";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                stats.Add(new SupplierStats
-                {
-                    SupplierId = reader.GetInt32("id"),
-                    SupplierName = reader.GetString("name"),
-                    IngredientCount = reader.GetInt32("ingredient_count"),
-                    TotalInventoryValue = reader.GetDecimal("total_inventory_value"),
-                    AveragePrice = reader.GetDecimal("average_price")
-                });
-            }
-            
-            return stats;
-        }
-
-        // Ingredient methods
-        public static List<Ingredient> GetAllIngredients()
-        {
-            var ingredients = new List<Ingredient>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT i.*, s.name as supplier_name 
-                FROM ingredients i 
-                LEFT JOIN suppliers s ON i.supplier_id = s.id 
-                ORDER BY i.name";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                ingredients.Add(new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
-                });
-            }
-            
-            return ingredients;
-        }
-
-        public static Ingredient GetIngredientById(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT i.*, s.name as supplier_name 
-                FROM ingredients i 
-                LEFT JOIN suppliers s ON i.supplier_id = s.id 
-                WHERE i.id = @id";
-            command.Parameters.AddWithValue("@id", id);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                return new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
-                };
-            }
-            
-            return null;
-        }
-
-        public static Ingredient GetIngredientByName(string name)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT i.*, s.name as supplier_name 
-                FROM ingredients i 
-                LEFT JOIN suppliers s ON i.supplier_id = s.id 
-                WHERE i.name = @name";
-            command.Parameters.AddWithValue("@name", name);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                return new Ingredient
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    SupplierId = reader.IsDBNull("supplier_id") ? null : reader.GetInt32("supplier_id"),
-                    SupplierName = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
-                };
-            }
-            
-            return null;
-        }
-
-        public static void InsertIngredient(Ingredient ingredient)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                INSERT INTO ingredients (name, unit, unit_price, category, supplier_id, supplier_name) 
-                VALUES (@name, @unit, @unit_price, @category, @supplier_id, @supplier_name)";
-            
-            command.Parameters.AddWithValue("@name", ingredient.Name);
-            command.Parameters.AddWithValue("@unit", ingredient.Unit);
-            command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
-            command.Parameters.AddWithValue("@category", (object)ingredient.Category ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_id", (object)ingredient.SupplierId ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value);
-            
-            command.ExecuteNonQuery();
-        }
-
-        public static void UpdateIngredient(Ingredient ingredient)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                UPDATE ingredients 
-                SET name = @name, unit = @unit, unit_price = @unit_price, 
-                    category = @category, supplier_id = @supplier_id, supplier_name = @supplier_name 
-                WHERE id = @id";
-            
-            command.Parameters.AddWithValue("@id", ingredient.Id);
-            command.Parameters.AddWithValue("@name", ingredient.Name);
-            command.Parameters.AddWithValue("@unit", ingredient.Unit);
-            command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
-            command.Parameters.AddWithValue("@category", (object)ingredient.Category ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_id", (object)ingredient.SupplierId ?? DBNull.Value);
-            command.Parameters.AddWithValue("@supplier_name", (object)ingredient.SupplierName ?? DBNull.Value);
-            
-            command.ExecuteNonQuery();
-        }
-
-        public static void DeleteIngredient(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "DELETE FROM ingredients WHERE id = @id";
-            command.Parameters.AddWithValue("@id", id);
-            
-            command.ExecuteNonQuery();
-        }
-
-        // Recipe methods
-        public static List<Recipe> GetAllRecipes()
-        {
-            var recipes = new List<Recipe>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM recipes";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                var recipe = new Recipe
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    BatchYield = reader.GetInt32("batch_yield"),
-                    TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
-                };
-                
-                // Get tags
-                if (!reader.IsDBNull("tags"))
-                {
-                    var tagsString = reader.GetString("tags");
-                    if (!string.IsNullOrEmpty(tagsString))
-                    {
-                        recipe.Tags = new List<string>(tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries));
-                    }
-                }
-                
-                // Get ingredients
-                recipe.Ingredients = GetRecipeIngredients(recipe.Id);
-                recipes.Add(recipe);
-            }
-            
-            return recipes;
-        }
-
-        public static Recipe GetRecipeById(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM recipes WHERE id = @id";
-            command.Parameters.AddWithValue("@id", id);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                var recipe = new Recipe
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    BatchYield = reader.GetInt32("batch_yield"),
-                    TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
-                };
-                
-                // Get tags
-                if (!reader.IsDBNull("tags"))
-                {
-                    var tagsString = reader.GetString("tags");
-                    if (!string.IsNullOrEmpty(tagsString))
-                    {
-                        recipe.Tags = new List<string>(tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries));
-                    }
-                }
-                
-                // Get ingredients
-                recipe.Ingredients = GetRecipeIngredients(id);
-                return recipe;
-            }
-            
-            return null;
-        }
-
-        public static Recipe GetRecipeByName(string name)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM recipes WHERE name = @name";
-            command.Parameters.AddWithValue("@name", name);
-            
-            using var reader = command.ExecuteReader();
-            if (reader.Read())
-            {
-                var recipe = new Recipe
-                {
-                    Id = reader.GetInt32("id"),
-                    Name = reader.GetString("name"),
-                    Description = reader.IsDBNull("description") ? "" : reader.GetString("description"),
-                    Category = reader.IsDBNull("category") ? "" : reader.GetString("category"),
-                    BatchYield = reader.GetInt32("batch_yield"),
-                    TargetFoodCostPercentage = reader.GetDecimal("target_food_cost_percentage")
-                };
-                
-                // Get tags
-                if (!reader.IsDBNull("tags"))
-                {
-                    var tagsString = reader.GetString("tags");
-                    if (!string.IsNullOrEmpty(tagsString))
-                    {
-                        recipe.Tags = new List<string>(tagsString.Split(',', StringSplitOptions.RemoveEmptyEntries));
-                    }
-                }
-                
-                // Get ingredients
-                recipe.Ingredients = GetRecipeIngredients(recipe.Id);
-                return recipe;
-            }
-            
-            return null;
-        }
-
-        private static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
-        {
-            var ingredients = new List<RecipeIngredient>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT ri.ingredient_id, ri.quantity, i.name, i.unit, i.unit_price, i.supplier_name
-                FROM recipe_ingredients ri
-                JOIN ingredients i ON ri.ingredient_id = i.id
-                WHERE ri.recipe_id = @recipeId";
-            command.Parameters.AddWithValue("@recipeId", recipeId);
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                ingredients.Add(new RecipeIngredient
-                {
-                    IngredientId = reader.GetInt32("ingredient_id"),
-                    Quantity = reader.GetDecimal("quantity"),
-                    IngredientName = reader.GetString("name"),
-                    Unit = reader.GetString("unit"),
-                    UnitPrice = reader.GetDecimal("unit_price"),
-                    Supplier = reader.IsDBNull("supplier_name") ? "" : reader.GetString("supplier_name")
-                });
-            }
-            
-            return ingredients;
-        }
-
-        public static int InsertRecipe(Recipe recipe)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            
-            try
-            {
-                // Insert recipe
-                using (var command = connection.CreateCommand())
-                {
-                    command.Transaction = transaction;
-                    command.CommandText = @"
-                        INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) 
-                        VALUES (@name, @description, @category, @tags, @batch_yield, @target_food_cost_percentage);
-                        SELECT last_insert_rowid();";
-                    
-                    command.Parameters.AddWithValue("@name", recipe.Name);
-                    command.Parameters.AddWithValue("@description", (object)recipe.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@category", (object)recipe.Category ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@tags", recipe.Tags != null ? string.Join(",", recipe.Tags) : DBNull.Value);
-                    command.Parameters.AddWithValue("@batch_yield", recipe.BatchYield);
-                    command.Parameters.AddWithValue("@target_food_cost_percentage", recipe.TargetFoodCostPercentage);
-                    
-                    var recipeId = Convert.ToInt32(command.ExecuteScalar());
-
-                    // Insert ingredients
-                    if (recipe.Ingredients != null)
-                    {
-                        foreach (var ingredient in recipe.Ingredients)
-                        {
-                            using var ingredientCommand = connection.CreateCommand();
-                            ingredientCommand.Transaction = transaction;
-                            ingredientCommand.CommandText = @"
-                                INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) 
-                                VALUES (@recipe_id, @ingredient_id, @quantity)";
-                            
-                            ingredientCommand.Parameters.AddWithValue("@recipe_id", recipeId);
-                            ingredientCommand.Parameters.AddWithValue("@ingredient_id", ingredient.IngredientId);
-                            ingredientCommand.Parameters.AddWithValue("@quantity", ingredient.Quantity);
-                            
-                            ingredientCommand.ExecuteNonQuery();
-                        }
-                    }
-                    
-                    transaction.Commit();
-                    return recipeId;
-                }
-            }
-            catch
-            {
-                transaction.Rollback();
-                throw;
-            }
-        }
-
-        public static void UpdateRecipe(Recipe recipe)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            
-            try
-            {
-                // Update recipe
-                using (var command = connection.CreateCommand())
-                {
-                    command.Transaction = transaction;
-                    command.CommandText = @"
-                        UPDATE recipes 
-                        SET name = @name, description = @description, category = @category, 
-                            tags = @tags, batch_yield = @batch_yield, target_food_cost_percentage = @target_food_cost_percentage 
-                        WHERE id = @id";
-                    
-                    command.Parameters.AddWithValue("@id", recipe.Id);
-                    command.Parameters.AddWithValue("@name", recipe.Name);
-                    command.Parameters.AddWithValue("@description", (object)recipe.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@category", (object)recipe.Category ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@tags", recipe.Tags != null ? string.Join(",", recipe.Tags) : DBNull.Value);
-                    command.Parameters.AddWithValue("@batch_yield", recipe.BatchYield);
-                    command.Parameters.AddWithValue("@target_food_cost_percentage", recipe.TargetFoodCostPercentage);
-                    
+                    command.CommandText = createSettingsTable;
                     command.ExecuteNonQuery();
                 }
-
-                // Delete existing ingredients
-                using (var command = connection.CreateCommand())
-                {
-                    command.Transaction = transaction;
-                    command.CommandText = "DELETE FROM recipe_ingredients WHERE recipe_id = @id";
-                    command.Parameters.AddWithValue("@id", recipe.Id);
-                    command.ExecuteNonQuery();
-                }
-
-                // Insert updated ingredients
-                if (recipe.Ingredients != null)
-                {
-                    foreach (var ingredient in recipe.Ingredients)
-                    {
-                        using var ingredientCommand = connection.CreateCommand();
-                        ingredientCommand.Transaction = transaction;
-                        ingredientCommand.CommandText = @"
-                            INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) 
-                            VALUES (@recipe_id, @ingredient_id, @quantity)";
-                        
-                        ingredientCommand.Parameters.AddWithValue("@recipe_id", recipe.Id);
-                        ingredientCommand.Parameters.AddWithValue("@ingredient_id", ingredient.IngredientId);
-                        ingredientCommand.Parameters.AddWithValue("@quantity", ingredient.Quantity);
-                        
-                        ingredientCommand.ExecuteNonQuery();
-                    }
-                }
-                
-                transaction.Commit();
-            }
-            catch
-            {
-                transaction.Rollback();
-                throw;
             }
         }
 
-        public static void DeleteRecipe(int id)
-        {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "DELETE FROM recipes WHERE id = @id";
-            command.Parameters.AddWithValue("@id", id);
-            
-            command.ExecuteNonQuery();
-        }
+        // ========== SETTINGS METHODS ==========
 
-        // Settings methods
         public static Dictionary<string, string> GetAllSettings()
         {
             var settings = new Dictionary<string, string>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT key, value FROM settings";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+
+            using (var connection = new SQLiteConnection(_connectionString))
             {
-                settings[reader.GetString("key")] = reader.GetString("value");
+                connection.Open();
+                string query = "SELECT * FROM settings";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        settings[reader["key"].ToString()] = reader["value"]?.ToString();
+                    }
+                }
             }
-            
+
             return settings;
         }
 
         public static void SetSetting(string key, string value)
         {
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)";
-            command.Parameters.AddWithValue("@key", key);
-            command.Parameters.AddWithValue("@value", value);
-            
-            command.ExecuteNonQuery();
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@key", key);
+                    command.Parameters.AddWithValue("@value", value);
+                    command.ExecuteNonQuery();
+                }
+            }
         }
 
-        // Category methods
+        // ========== SUPPLIER METHODS ==========
+
+        public static List<Supplier> GetAllSuppliers()
+        {
+            var suppliers = new List<Supplier>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT * FROM suppliers ORDER BY name";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        suppliers.Add(new Supplier
+                        {
+                            Id = Convert.ToInt32(reader["id"]),
+                            Name = reader["name"].ToString(),
+                            ContactPerson = reader["contact_person"]?.ToString(),
+                            Phone = reader["phone"]?.ToString(),
+                            Email = reader["email"]?.ToString(),
+                            Address = reader["address"]?.ToString(),
+                            CreatedAt = reader["created_at"]?.ToString()
+                        });
+                    }
+                }
+            }
+
+            return suppliers;
+        }
+
+        public static void InsertSupplier(Supplier supplier)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"INSERT INTO suppliers (name, contact_person, phone, email, address) 
+                               VALUES (@name, @contact_person, @phone, @email, @address)";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", supplier.Name);
+                    command.Parameters.AddWithValue("@contact_person", supplier.ContactPerson ?? "");
+                    command.Parameters.AddWithValue("@phone", supplier.Phone ?? "");
+                    command.Parameters.AddWithValue("@email", supplier.Email ?? "");
+                    command.Parameters.AddWithValue("@address", supplier.Address ?? "");
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void UpdateSupplier(Supplier supplier)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"UPDATE suppliers SET name = @name, contact_person = @contact_person, 
+                               phone = @phone, email = @email, address = @address WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", supplier.Name);
+                    command.Parameters.AddWithValue("@contact_person", supplier.ContactPerson ?? "");
+                    command.Parameters.AddWithValue("@phone", supplier.Phone ?? "");
+                    command.Parameters.AddWithValue("@email", supplier.Email ?? "");
+                    command.Parameters.AddWithValue("@address", supplier.Address ?? "");
+                    command.Parameters.AddWithValue("@id", supplier.Id);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void DeleteSupplier(int supplierId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                
+                string updateIngredients = "UPDATE ingredients SET supplier_id = NULL WHERE supplier_id = @supplierId";
+                using (var command = new SQLiteCommand(updateIngredients, connection))
+                {
+                    command.Parameters.AddWithValue("@supplierId", supplierId);
+                    command.ExecuteNonQuery();
+                }
+
+                string deleteSupplier = "DELETE FROM suppliers WHERE id = @id";
+                using (var command = new SQLiteCommand(deleteSupplier, connection))
+                {
+                    command.Parameters.AddWithValue("@id", supplierId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static Supplier GetSupplierByName(string name)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT * FROM suppliers WHERE name = @name";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", name);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return new Supplier
+                            {
+                                Id = Convert.ToInt32(reader["id"]),
+                                Name = reader["name"].ToString(),
+                                ContactPerson = reader["contact_person"]?.ToString(),
+                                Phone = reader["phone"]?.ToString(),
+                                Email = reader["email"]?.ToString(),
+                                Address = reader["address"]?.ToString(),
+                                CreatedAt = reader["created_at"]?.ToString()
+                            };
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public static List<Ingredient> GetIngredientsBySupplier(int supplierId)
+        {
+            var ingredients = new List<Ingredient>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT * FROM ingredients WHERE supplier_id = @supplierId ORDER BY name";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@supplierId", supplierId);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            ingredients.Add(new Ingredient
+                            {
+                                Id = Convert.ToInt32(reader["id"]),
+                                Name = reader["name"].ToString(),
+                                Unit = reader["unit"].ToString(),
+                                UnitPrice = Convert.ToDecimal(reader["unit_price"]),
+                                Category = reader["category"]?.ToString(),
+                                SupplierId = reader["supplier_id"] != DBNull.Value ? Convert.ToInt32(reader["supplier_id"]) : (int?)null
+                            });
+                        }
+                    }
+                }
+            }
+
+            return ingredients;
+        }
+
+        public static dynamic GetSupplierStatistics(int supplierId)
+        {
+            var ingredients = GetIngredientsBySupplier(supplierId);
+            return new
+            {
+                IngredientCount = ingredients.Count,
+                TotalValue = ingredients.Sum(i => i.UnitPrice)
+            };
+        }
+
+        // ========== INGREDIENT METHODS ==========
+
+        public static List<Ingredient> GetAllIngredients()
+        {
+            var ingredients = new List<Ingredient>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"SELECT i.*, s.name as supplier_name 
+                               FROM ingredients i 
+                               LEFT JOIN suppliers s ON i.supplier_id = s.id 
+                               ORDER BY i.name";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        ingredients.Add(new Ingredient
+                        {
+                            Id = Convert.ToInt32(reader["id"]),
+                            Name = reader["name"].ToString(),
+                            Unit = reader["unit"].ToString(),
+                            UnitPrice = Convert.ToDecimal(reader["unit_price"]),
+                            Category = reader["category"]?.ToString(),
+                            SupplierId = reader["supplier_id"] != DBNull.Value ? Convert.ToInt32(reader["supplier_id"]) : (int?)null,
+                            SupplierName = reader["supplier_name"]?.ToString()
+                        });
+                    }
+                }
+            }
+
+            return ingredients;
+        }
+
+        public static void InsertIngredient(Ingredient ingredient)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "INSERT INTO ingredients (name, unit, unit_price, category, supplier_id) VALUES (@name, @unit, @unit_price, @category, @supplier_id)";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", ingredient.Name);
+                    command.Parameters.AddWithValue("@unit", ingredient.Unit);
+                    command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
+                    command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
+                    command.Parameters.AddWithValue("@supplier_id", ingredient.SupplierId ?? (object)DBNull.Value);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void UpdateIngredient(Ingredient ingredient)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "UPDATE ingredients SET name = @name, unit = @unit, unit_price = @unit_price, category = @category, supplier_id = @supplier_id WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", ingredient.Name);
+                    command.Parameters.AddWithValue("@unit", ingredient.Unit);
+                    command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
+                    command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
+                    command.Parameters.AddWithValue("@supplier_id", ingredient.SupplierId ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@id", ingredient.Id);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void DeleteIngredient(int ingredientId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+
+                string deleteRecipeIngredients = "DELETE FROM recipe_ingredients WHERE ingredient_id = @ingredientId";
+                using (var command = new SQLiteCommand(deleteRecipeIngredients, connection))
+                {
+                    command.Parameters.AddWithValue("@ingredientId", ingredientId);
+                    command.ExecuteNonQuery();
+                }
+
+                string deleteIngredient = "DELETE FROM ingredients WHERE id = @id";
+                using (var command = new SQLiteCommand(deleteIngredient, connection))
+                {
+                    command.Parameters.AddWithValue("@id", ingredientId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static List<string> GetIngredientCategories()
+        {
+            var categories = new List<string>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT DISTINCT category FROM ingredients WHERE category IS NOT NULL AND category != '' ORDER BY category";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        categories.Add(reader["category"].ToString());
+                    }
+                }
+            }
+
+            return categories;
+        }
+
+        // ========== RECIPE METHODS ==========
+
+        public static List<Recipe> GetAllRecipes()
+        {
+            var recipes = new List<Recipe>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT * FROM recipes ORDER BY name";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        recipes.Add(new Recipe
+                        {
+                            Id = Convert.ToInt32(reader["id"]),
+                            Name = reader["name"].ToString(),
+                            Description = reader["description"]?.ToString(),
+                            Category = reader["category"]?.ToString(),
+                            Tags = reader["tags"]?.ToString(),
+                            BatchYield = Convert.ToInt32(reader["batch_yield"]),
+                            TargetFoodCostPercentage = Convert.ToDecimal(reader["target_food_cost_percentage"])
+                        });
+                    }
+                }
+            }
+
+            return recipes;
+        }
+
+        public static void InsertRecipe(Recipe recipe)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) VALUES (@name, @description, @category, @tags, @batch_yield, @target_food_cost_percentage)";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", recipe.Name);
+                    command.Parameters.AddWithValue("@description", recipe.Description ?? "");
+                    command.Parameters.AddWithValue("@category", recipe.Category ?? "");
+                    command.Parameters.AddWithValue("@tags", recipe.Tags ?? "");
+                    command.Parameters.AddWithValue("@batch_yield", recipe.BatchYield);
+                    command.Parameters.AddWithValue("@target_food_cost_percentage", recipe.TargetFoodCostPercentage);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void UpdateRecipe(Recipe recipe)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "UPDATE recipes SET name = @name, description = @description, category = @category, tags = @tags, batch_yield = @batch_yield, target_food_cost_percentage = @target_food_cost_percentage WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", recipe.Name);
+                    command.Parameters.AddWithValue("@description", recipe.Description ?? "");
+                    command.Parameters.AddWithValue("@category", recipe.Category ?? "");
+                    command.Parameters.AddWithValue("@tags", recipe.Tags ?? "");
+                    command.Parameters.AddWithValue("@batch_yield", recipe.BatchYield);
+                    command.Parameters.AddWithValue("@target_food_cost_percentage", recipe.TargetFoodCostPercentage);
+                    command.Parameters.AddWithValue("@id", recipe.Id);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void DeleteRecipe(int recipeId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+
+                string deleteRecipeIngredients = "DELETE FROM recipe_ingredients WHERE recipe_id = @recipeId";
+                using (var command = new SQLiteCommand(deleteRecipeIngredients, connection))
+                {
+                    command.Parameters.AddWithValue("@recipeId", recipeId);
+                    command.ExecuteNonQuery();
+                }
+
+                string deleteRecipe = "DELETE FROM recipes WHERE id = @id";
+                using (var command = new SQLiteCommand(deleteRecipe, connection))
+                {
+                    command.Parameters.AddWithValue("@id", recipeId);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
         public static List<string> GetRecipeCategories()
         {
             var categories = new List<string>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL AND category != '' ORDER BY category";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                categories.Add(reader.GetString("category"));
-            }
-            
-            return categories;
-        }
 
-        public static List<string> GetAllCategories()
-        {
-            var categories = new List<string>();
-            
-            using var connection = new SqliteConnection(ConnectionString);
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT DISTINCT category FROM recipes 
-                WHERE category IS NOT NULL AND category != '' 
-                ORDER BY category";
-            
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            using (var connection = new SQLiteConnection(_connectionString))
             {
-                categories.Add(reader.GetString("category"));
-            }
-            
-            return categories;
-        }
-
-        public static bool AddCategoryToDatabase(string category)
-        {
-            try
-            {
-                // Since categories are stored directly in recipes, we don't need to add to a separate table
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public static bool DeleteCategoryFromDatabase(string category)
-        {
-            try
-            {
-                using var connection = new SqliteConnection(ConnectionString);
                 connection.Open();
-                
-                using var command = connection.CreateCommand();
-                command.CommandText = "UPDATE recipes SET category = '' WHERE category = @category";
-                command.Parameters.AddWithValue("@category", category);
-                command.ExecuteNonQuery();
-                
-                return true;
+                string query = "SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL AND category != '' ORDER BY category";
+
+                using (var command = new SQLiteCommand(query, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        categories.Add(reader["category"].ToString());
+                    }
+                }
             }
-            catch
+
+            return categories;
+        }
+
+        public static List<RecipeIngredient> GetRecipeIngredients(int recipeId)
+        {
+            var recipeIngredients = new List<RecipeIngredient>();
+
+            using (var connection = new SQLiteConnection(_connectionString))
             {
-                return false;
+                connection.Open();
+                string query = @"
+                    SELECT ri.*, i.name as ingredient_name, i.unit, i.unit_price, s.name as supplier_name
+                    FROM recipe_ingredients ri 
+                    INNER JOIN ingredients i ON ri.ingredient_id = i.id 
+                    LEFT JOIN suppliers s ON i.supplier_id = s.id
+                    WHERE ri.recipe_id = @recipeId";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@recipeId", recipeId);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var unitPrice = Convert.ToDecimal(reader["unit_price"]);
+                            var quantity = Convert.ToDecimal(reader["quantity"]);
+                            
+                            recipeIngredients.Add(new RecipeIngredient
+                            {
+                                Id = Convert.ToInt32(reader["id"]),
+                                RecipeId = Convert.ToInt32(reader["recipe_id"]),
+                                IngredientId = Convert.ToInt32(reader["ingredient_id"]),
+                                Quantity = quantity,
+                                IngredientName = reader["ingredient_name"].ToString(),
+                                Unit = reader["unit"].ToString(),
+                                UnitPrice = unitPrice,
+                                Supplier = reader["supplier_name"]?.ToString(),
+                                
+                            });
+                        }
+                    }
+                }
+            }
+
+            return recipeIngredients;
+        }
+
+        public static void AddRecipeIngredient(RecipeIngredient recipeIngredient)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (@recipe_id, @ingredient_id, @quantity)";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@recipe_id", recipeIngredient.RecipeId);
+                    command.Parameters.AddWithValue("@ingredient_id", recipeIngredient.IngredientId);
+                    command.Parameters.AddWithValue("@quantity", recipeIngredient.Quantity);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void UpdateRecipeIngredient(RecipeIngredient recipeIngredient)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "UPDATE recipe_ingredients SET quantity = @quantity WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@quantity", recipeIngredient.Quantity);
+                    command.Parameters.AddWithValue("@id", recipeIngredient.Id);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void DeleteRecipeIngredient(int recipeIngredientId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "DELETE FROM recipe_ingredients WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@id", recipeIngredientId);
+                    command.ExecuteNonQuery();
+                }
             }
         }
     }

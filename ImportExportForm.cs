@@ -1,5 +1,3 @@
-// [file name]: ImportExportForm.cs
-// [file content begin]
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -346,11 +344,20 @@ namespace CostChef
 
                     if (openDialog.ShowDialog() == DialogResult.OK)
                     {
-                        bool success = ImportExportService.ImportRecipesFromCsv(openDialog.FileName);
-                        if (success)
-                            MessageBox.Show("Recipes imported successfully!", "Import Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        var recipes = ImportExportService.ImportRecipesFromCsv(openDialog.FileName);
+                        if (recipes != null && recipes.Count > 0)
+                        {
+                            // Save recipes to database
+                            foreach (var recipe in recipes)
+                            {
+                                DatabaseContext.InsertRecipe(recipe);
+                            }
+                            MessageBox.Show($"{recipes.Count} recipes imported successfully!", "Import Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                         else
-                            MessageBox.Show("Failed to import recipes.", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        {
+                            MessageBox.Show("No recipes found in the file or failed to import.", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
                     }
                 }
             }
@@ -372,11 +379,20 @@ namespace CostChef
 
                     if (openDialog.ShowDialog() == DialogResult.OK)
                     {
-                        bool success = ImportExportService.ImportIngredientsFromCsv(openDialog.FileName);
-                        if (success)
-                            MessageBox.Show("Ingredients imported successfully!", "Import Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        var ingredients = ImportExportService.ImportIngredientsFromCsv(openDialog.FileName);
+                        if (ingredients != null && ingredients.Count > 0)
+                        {
+                            // Save ingredients to database
+                            foreach (var ingredient in ingredients)
+                            {
+                                DatabaseContext.InsertIngredient(ingredient);
+                            }
+                            MessageBox.Show($"{ingredients.Count} ingredients imported successfully!", "Import Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                         else
-                            MessageBox.Show("Failed to import ingredients.", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        {
+                            MessageBox.Show("No ingredients found in the file or failed to import.", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
                     }
                 }
             }
@@ -396,4 +412,3 @@ namespace CostChef
         }
     }
 }
-// [file content end]

@@ -1,178 +1,134 @@
 using System;
-using System.IO;
-using System.Data;
 using System.Collections.Generic;
-using Microsoft.Data.Sqlite;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using CsvHelper;
+using System.Globalization;
 
 namespace CostChef
 {
     public static class ImportExportService
     {
-        public static bool ExportRecipesToCsv(string filePath)
+        public static void ExportIngredientsToCsv(string filePath, List<Ingredient> ingredients)
         {
-            try
+            using (var writer = new StreamWriter(filePath))
+            using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
             {
-                var recipes = DatabaseContext.GetAllRecipes();
-                using var writer = new StreamWriter(filePath);
-                
-                // Write header
-                writer.WriteLine("ID,Name,Description,Category,Tags,BatchYield,TargetFoodCostPercentage");
-                
-                // Write data
-                foreach (var recipe in recipes)
-                {
-                    string tags = recipe.Tags != null ? string.Join(",", recipe.Tags) : "";
-                    writer.WriteLine($"\"{recipe.Id}\",\"{recipe.Name}\",\"{recipe.Description}\",\"{recipe.Category}\",\"{tags}\",\"{recipe.BatchYield}\",\"{recipe.TargetFoodCostPercentage}\"");
-                }
-                
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Export error: {ex.Message}");
-                return false;
+                csv.WriteRecords(ingredients);
             }
         }
 
-        public static bool ExportIngredientsToCsv(string filePath)
+        public static List<Ingredient> ImportIngredientsFromCsv(string filePath)
         {
-            try
+            using (var reader = new StreamReader(filePath))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
-                var ingredients = DatabaseContext.GetAllIngredients();
-                using var writer = new StreamWriter(filePath);
-                
-                // Write header
-                writer.WriteLine("ID,Name,Unit,UnitPrice,Category,SupplierId,SupplierName");
-                
-                // Write data
-                foreach (var ingredient in ingredients)
-                {
-                    writer.WriteLine($"\"{ingredient.Id}\",\"{ingredient.Name}\",\"{ingredient.Unit}\",\"{ingredient.UnitPrice}\",\"{ingredient.Category}\",\"{ingredient.SupplierId}\",\"{ingredient.SupplierName}\"");
-                }
-                
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Export error: {ex.Message}");
-                return false;
+                return csv.GetRecords<Ingredient>().ToList();
             }
         }
 
-        public static bool ImportRecipesFromCsv(string filePath)
+        public static void ExportIngredientsToJson(string filePath, List<Ingredient> ingredients)
         {
-            try
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(ingredients, options);
+            File.WriteAllText(filePath, json);
+        }
+
+        public static List<Ingredient> ImportIngredientsFromJson(string filePath)
+        {
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<List<Ingredient>>(json) ?? new List<Ingredient>();
+        }
+
+        public static void ExportRecipesToJson(string filePath, List<Recipe> recipes)
+        {
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(recipes, options);
+            File.WriteAllText(filePath, json);
+        }
+
+        public static List<Recipe> ImportRecipesFromJson(string filePath)
+        {
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<List<Recipe>>(json) ?? new List<Recipe>();
+        }
+
+        public static void ExportRecipesToCsv(string filePath, List<Recipe> recipes)
+        {
+            // For simplicity, we'll export basic recipe info
+            var exportData = recipes.Select(r => new
             {
-                var lines = File.ReadAllLines(filePath);
-                int importedCount = 0;
-                
-                // Skip header (line 0)
-                for (int i = 1; i < lines.Length; i++)
+                r.Name,
+                r.Description,
+                r.Category,
+                r.Tags,
+                r.BatchYield,
+                r.TargetFoodCostPercentage
+            });
+
+            using (var writer = new StreamWriter(filePath))
+            using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+            {
+                csv.WriteRecords(exportData);
+            }
+        }
+
+        public static List<Recipe> ImportRecipesFromCsv(string filePath)
+        {
+            // This is a simplified import - you might want to enhance this
+            using (var reader = new StreamReader(filePath))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
+            {
+                var records = csv.GetRecords<dynamic>().ToList();
+                var recipes = new List<Recipe>();
+
+                foreach (var record in records)
                 {
-                    if (string.IsNullOrWhiteSpace(lines[i])) continue;
-                    
-                    var fields = ParseCsvLine(lines[i]);
-                    if (fields.Length >= 6)
+                    recipes.Add(new Recipe
                     {
-                        var recipe = new Recipe
-                        {
-                            Name = fields[1],
-                            Description = fields[2],
-                            Category = fields[3],
-                            BatchYield = int.Parse(fields[5]),
-                            TargetFoodCostPercentage = decimal.Parse(fields[6])
-                        };
-                        
-                        // Handle tags
-                        if (!string.IsNullOrEmpty(fields[4]))
-                        {
-                            recipe.Tags = new List<string>(fields[4].Split(',', StringSplitOptions.RemoveEmptyEntries));
-                        }
-                        
-                        DatabaseContext.InsertRecipe(recipe);
-                        importedCount++;
-                    }
+                        Name = record.Name,
+                        Description = record.Description,
+                        Category = record.Category,
+                        Tags = record.Tags,
+                        BatchYield = int.TryParse(record.BatchYield?.ToString(), out int yield) ? yield : 1,
+                        TargetFoodCostPercentage = decimal.TryParse(record.TargetFoodCostPercentage?.ToString(), out decimal cost) ? cost : 30.0m
+                    });
                 }
-                
-                return importedCount > 0;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Import error: {ex.Message}");
-                return false;
+
+                return recipes;
             }
         }
 
-        public static bool ImportIngredientsFromCsv(string filePath)
+        public static void ExportSuppliersToCsv(string filePath, List<Supplier> suppliers)
         {
-            try
+            using (var writer = new StreamWriter(filePath))
+            using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
             {
-                var lines = File.ReadAllLines(filePath);
-                int importedCount = 0;
-                
-                // Skip header (line 0)
-                for (int i = 1; i < lines.Length; i++)
-                {
-                    if (string.IsNullOrWhiteSpace(lines[i])) continue;
-                    
-                    var fields = ParseCsvLine(lines[i]);
-                    if (fields.Length >= 5)
-                    {
-                        var ingredient = new Ingredient
-                        {
-                            Name = fields[1],
-                            Unit = fields[2],
-                            UnitPrice = decimal.Parse(fields[3]),
-                            Category = fields[4]
-                        };
-                        
-                        // Handle supplier fields if present
-                        if (fields.Length >= 7)
-                        {
-                            if (!string.IsNullOrEmpty(fields[5]) && int.TryParse(fields[5], out int supplierId))
-                                ingredient.SupplierId = supplierId;
-                            ingredient.SupplierName = fields[6];
-                        }
-                        
-                        DatabaseContext.InsertIngredient(ingredient);
-                        importedCount++;
-                    }
-                }
-                
-                return importedCount > 0;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Import error: {ex.Message}");
-                return false;
+                csv.WriteRecords(suppliers);
             }
         }
 
-        private static string[] ParseCsvLine(string line)
+        public static List<Supplier> ImportSuppliersFromCsv(string filePath)
         {
-            var fields = new List<string>();
-            bool inQuotes = false;
-            string currentField = "";
-            
-            foreach (char c in line)
+            using (var reader = new StreamReader(filePath))
+            using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
-                if (c == '"')
-                {
-                    inQuotes = !inQuotes;
-                }
-                else if (c == ',' && !inQuotes)
-                {
-                    fields.Add(currentField);
-                    currentField = "";
-                }
-                else
-                {
-                    currentField += c;
-                }
+                return csv.GetRecords<Supplier>().ToList();
             }
-            
-            fields.Add(currentField);
-            return fields.ToArray();
+        }
+
+        public static void ExportSuppliersToJson(string filePath, List<Supplier> suppliers)
+        {
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(suppliers, options);
+            File.WriteAllText(filePath, json);
+        }
+
+        public static List<Supplier> ImportSuppliersFromJson(string filePath)
+        {
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<List<Supplier>>(json) ?? new List<Supplier>();
         }
     }
 }

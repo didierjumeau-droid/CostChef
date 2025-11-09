@@ -1,168 +1,194 @@
 using System;
-using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
-using System.IO;
-using System.Text.Json;
+using System.Windows.Forms;
 
 namespace CostChef
 {
     public partial class SupplierReportsForm : Form
     {
-        private DataGridView dataGridViewReports;
-        private Button btnClose;
-        private Button btnExportToCsv;
-        private Button btnExportToJson;
+        private List<Supplier> suppliers;
+        private List<Ingredient> ingredients;
 
         public SupplierReportsForm()
         {
             InitializeComponent();
-            LoadSupplierReports();
+            LoadSuppliers();
+            LoadIngredients();
+            SetupDataGridView();
         }
 
         private void InitializeComponent()
         {
-            this.dataGridViewReports = new DataGridView();
-            this.btnClose = new Button();
-            this.btnExportToCsv = new Button();
-            this.btnExportToJson = new Button();
-
-            this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(700, 500);
             this.Text = "Supplier Reports";
-            this.StartPosition = FormStartPosition.CenterParent;
+            this.Size = new Size(800, 600);
+            this.StartPosition = FormStartPosition.CenterScreen;
 
-            // DataGrid
-            this.dataGridViewReports.Location = new System.Drawing.Point(12, 12);
-            this.dataGridViewReports.Size = new System.Drawing.Size(676, 350);
-            this.dataGridViewReports.ReadOnly = true;
-            this.dataGridViewReports.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            // Main layout panel
+            var mainPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
+            this.Controls.Add(mainPanel);
 
-            // Export Buttons
-            this.btnExportToCsv.Location = new System.Drawing.Point(12, 380);
-            this.btnExportToCsv.Size = new System.Drawing.Size(120, 30);
-            this.btnExportToCsv.Text = "Export to CSV";
-            this.btnExportToCsv.Click += (s, e) => ExportSupplierReportsToCsv();
+            // Title
+            var titleLabel = new Label
+            {
+                Text = "Supplier Reports",
+                Font = new Font("Arial", 16, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(10, 10)
+            };
+            mainPanel.Controls.Add(titleLabel);
 
-            this.btnExportToJson.Location = new System.Drawing.Point(142, 380);
-            this.btnExportToJson.Size = new System.Drawing.Size(120, 30);
-            this.btnExportToJson.Text = "Export to JSON";
-            this.btnExportToJson.Click += (s, e) => ExportSupplierReportsToJson();
+            // Supplier selection
+            var supplierLabel = new Label
+            {
+                Text = "Select Supplier:",
+                Location = new Point(10, 50),
+                AutoSize = true
+            };
+            mainPanel.Controls.Add(supplierLabel);
 
-            // Close Button
-            this.btnClose.Location = new System.Drawing.Point(588, 380);
-            this.btnClose.Size = new System.Drawing.Size(100, 30);
-            this.btnClose.Text = "Close";
-            this.btnClose.Click += (s, e) => this.Close();
+            var supplierComboBox = new ComboBox
+            {
+                Location = new Point(120, 47),
+                Size = new Size(200, 25),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            supplierComboBox.SelectedIndexChanged += (s, e) => LoadSupplierReport();
+            mainPanel.Controls.Add(supplierComboBox);
 
-            this.Controls.AddRange(new Control[] {
-                dataGridViewReports, btnExportToCsv, btnExportToJson, btnClose
-            });
+            // Report type selection
+            var reportTypeLabel = new Label
+            {
+                Text = "Report Type:",
+                Location = new Point(350, 50),
+                AutoSize = true
+            };
+            mainPanel.Controls.Add(reportTypeLabel);
 
-            this.ResumeLayout(false);
+            var reportTypeComboBox = new ComboBox
+            {
+                Location = new Point(450, 47),
+                Size = new Size(150, 25),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            reportTypeComboBox.Items.AddRange(new[] { "All Suppliers", "Selected Supplier" });
+            reportTypeComboBox.SelectedIndex = 0;
+            reportTypeComboBox.SelectedIndexChanged += (s, e) => UpdateReport();
+            mainPanel.Controls.Add(reportTypeComboBox);
+
+            // DataGridView for reports
+            var dataGridView = new DataGridView
+            {
+                Location = new Point(10, 90),
+                Size = new Size(760, 400),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+            };
+            mainPanel.Controls.Add(dataGridView);
+
+            // Close button
+            var closeButton = new Button
+            {
+                Text = "Close",
+                Location = new Point(680, 500),
+                Size = new Size(90, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
+            closeButton.Click += (s, e) => this.Close();
+            mainPanel.Controls.Add(closeButton);
+
+            // Initialize controls
+            this.suppliersComboBox = supplierComboBox;
+            this.reportTypeComboBox = reportTypeComboBox;
+            this.reportsDataGridView = dataGridView;
         }
 
-        private void LoadSupplierReports()
+        private ComboBox suppliersComboBox;
+        private ComboBox reportTypeComboBox;
+        private DataGridView reportsDataGridView;
+
+        private void LoadSuppliers()
         {
-            try
+            suppliers = DatabaseContext.GetAllSuppliers();
+            suppliersComboBox.Items.Clear();
+            suppliersComboBox.Items.AddRange(suppliers.Select(s => s.Name).ToArray());
+            if (suppliersComboBox.Items.Count > 0)
+                suppliersComboBox.SelectedIndex = 0;
+        }
+
+        private void LoadIngredients()
+        {
+            ingredients = DatabaseContext.GetAllIngredients();
+        }
+
+        private void SetupDataGridView()
+        {
+            reportsDataGridView.Columns.Clear();
+        }
+
+        private void UpdateReport()
+        {
+            if (reportTypeComboBox.SelectedItem?.ToString() == "All Suppliers")
             {
-                var supplierStats = DatabaseContext.GetSupplierStatistics();
-                dataGridViewReports.DataSource = supplierStats;
+                LoadAllSuppliersReport();
+            }
+            else
+            {
+                LoadSupplierReport();
+            }
+        }
+
+        private void LoadAllSuppliersReport()
+        {
+            reportsDataGridView.Columns.Clear();
+            reportsDataGridView.Columns.AddRange(
+                new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 25 },
+                new DataGridViewTextBoxColumn { HeaderText = "Ingredients", DataPropertyName = "IngredientCount", FillWeight = 15 },
+                new DataGridViewTextBoxColumn { HeaderText = "Total Value", DataPropertyName = "TotalValue", FillWeight = 20 },
+                new DataGridViewTextBoxColumn { HeaderText = "Contact", DataPropertyName = "Contact", FillWeight = 20 },
+                new DataGridViewTextBoxColumn { HeaderText = "Phone", DataPropertyName = "Phone", FillWeight = 20 }
+            );
+
+            var reportData = new List<dynamic>();
+            foreach (var supplier in suppliers)
+            {
+                var supplierIngredients = ingredients.Where(i => i.SupplierId == supplier.Id).ToList();
+                var stats = DatabaseContext.GetSupplierStatistics(supplier.Id);
                 
-                if (dataGridViewReports.Columns.Count > 0)
+                reportData.Add(new
                 {
-                    dataGridViewReports.Columns["TotalInventoryValue"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.00";
-                    dataGridViewReports.Columns["AveragePrice"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.0000";
-                }
+                    SupplierName = supplier.Name,
+                    IngredientCount = supplierIngredients.Count,
+                    TotalValue = supplierIngredients.Sum(i => i.UnitPrice).ToString("C2"),
+                    Contact = supplier.ContactPerson ?? "N/A",
+                    Phone = supplier.Phone ?? "N/A"
+                });
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading supplier reports: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+
+            reportsDataGridView.DataSource = reportData;
         }
 
-        private void ExportSupplierReportsToCsv()
+        private void LoadSupplierReport()
         {
-            try
-            {
-                var supplierStats = DatabaseContext.GetSupplierStatistics();
-                if (supplierStats == null || supplierStats.Count == 0)
-                {
-                    MessageBox.Show("No supplier data to export.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+            if (suppliersComboBox.SelectedItem == null) return;
 
-                using (var saveDialog = new SaveFileDialog())
-                {
-                    saveDialog.Title = "Export Supplier Reports to CSV";
-                    saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-                    saveDialog.FileName = $"supplier_reports_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
-                    saveDialog.OverwritePrompt = true;
-                    
-                    if (saveDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var lines = new List<string>();
-                        // Header
-                        lines.Add("SupplierName,IngredientCount,TotalInventoryValue,AveragePrice");
-                        
-                        foreach (var stat in supplierStats)
-                        {
-                            lines.Add($"\"{stat.SupplierName}\",{stat.IngredientCount},{stat.TotalInventoryValue:F2},{stat.AveragePrice:F4}");
-                        }
-                        
-                        File.WriteAllLines(saveDialog.FileName, lines);
-                        
-                        MessageBox.Show($"Successfully exported {supplierStats.Count} supplier reports to CSV.", 
-                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error exporting supplier reports: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
+            var selectedSupplierName = suppliersComboBox.SelectedItem.ToString();
+            var supplier = suppliers.FirstOrDefault(s => s.Name == selectedSupplierName);
+            if (supplier == null) return;
 
-        private void ExportSupplierReportsToJson()
-        {
-            try
-            {
-                var supplierStats = DatabaseContext.GetSupplierStatistics();
-                if (supplierStats == null || supplierStats.Count == 0)
-                {
-                    MessageBox.Show("No supplier data to export.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+            reportsDataGridView.Columns.Clear();
+            reportsDataGridView.Columns.AddRange(
+                new DataGridViewTextBoxColumn { HeaderText = "Ingredient", DataPropertyName = "Name", FillWeight = 30 },
+                new DataGridViewTextBoxColumn { HeaderText = "Unit", DataPropertyName = "Unit", FillWeight = 15 },
+                new DataGridViewTextBoxColumn { HeaderText = "Unit Price", DataPropertyName = "UnitPrice", FillWeight = 20 },
+                new DataGridViewTextBoxColumn { HeaderText = "Category", DataPropertyName = "Category", FillWeight = 20 },
+                new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 15 }
+            );
 
-                using (var saveDialog = new SaveFileDialog())
-                {
-                    saveDialog.Title = "Export Supplier Reports to JSON";
-                    saveDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
-                    saveDialog.FileName = $"supplier_reports_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
-                    saveDialog.OverwritePrompt = true;
-                    
-                    if (saveDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var options = new JsonSerializerOptions { WriteIndented = true };
-                        string json = JsonSerializer.Serialize(supplierStats, options);
-                        File.WriteAllText(saveDialog.FileName, json);
-                        
-                        MessageBox.Show($"Successfully exported {supplierStats.Count} supplier reports to JSON.", 
-                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error exporting supplier reports: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            var supplierIngredients = ingredients.Where(i => i.SupplierId == supplier.Id).ToList();
+            reportsDataGridView.DataSource = supplierIngredients;
         }
     }
 }
