@@ -1,5 +1,3 @@
-// [file name]: SupplierManagementForm.cs
-// [file content begin]
 using System;
 using System.Windows.Forms;
 using System.Collections.Generic;
@@ -200,11 +198,9 @@ namespace CostChef
             {
                 var supplier = (Supplier)dataGridViewSuppliers.SelectedRows[0].DataBoundItem;
                 
-                // FIXED: Removed the parameter from the constructor call
-                using (var form = new SupplierIngredientsForm())
+                // FIXED: Now passes the selected supplier to the form
+                using (var form = new SupplierIngredientsForm(supplier))
                 {
-                    // If you need to pass the supplier to the form, you'll need to add a method or property
-                    // For now, we'll just show the form and let the user select the supplier
                     form.ShowDialog();
                 }
             }
@@ -216,4 +212,3 @@ namespace CostChef
         }
     }
 }
-// [file content end]

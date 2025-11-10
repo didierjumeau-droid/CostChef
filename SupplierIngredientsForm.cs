@@ -20,6 +20,30 @@ namespace CostChef
             LoadSuppliers();
         }
 
+        // ENHANCED CONSTRUCTOR: Now properly auto-loads the supplier's ingredients
+        public SupplierIngredientsForm(Supplier supplier)
+        {
+            InitializeComponent();
+            LoadSuppliers();
+            
+            // Auto-select and auto-load the provided supplier
+            if (supplier != null)
+            {
+                // Find and select the supplier in the combobox
+                foreach (Supplier item in cmbSuppliers.Items)
+                {
+                    if (item.Id == supplier.Id)
+                    {
+                        cmbSuppliers.SelectedItem = item;
+                        break;
+                    }
+                }
+                
+                // NEW: Immediately load the supplier's ingredients
+                LoadSupplierIngredients();
+            }
+        }
+
         private void InitializeComponent()
         {
             this.dataGridViewIngredients = new DataGridView();
@@ -99,6 +123,9 @@ namespace CostChef
                     {
                         dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.0000";
                     }
+                    
+                    // Update window title to show supplier name and ingredient count
+                    this.Text = $"Supplier Ingredients - {selectedSupplier.Name} ({ingredients.Count} items)";
                 }
             }
             catch (Exception ex)

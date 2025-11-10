@@ -14,9 +14,7 @@ namespace CostChef
         public SupplierReportsForm()
         {
             InitializeComponent();
-            LoadSuppliers();
-            LoadIngredients();
-            SetupDataGridView();
+            LoadData();
         }
 
         private void InitializeComponent()
@@ -109,18 +107,52 @@ namespace CostChef
         private ComboBox reportTypeComboBox;
         private DataGridView reportsDataGridView;
 
-        private void LoadSuppliers()
+        private void LoadData()
         {
-            suppliers = DatabaseContext.GetAllSuppliers();
-            suppliersComboBox.Items.Clear();
-            suppliersComboBox.Items.AddRange(suppliers.Select(s => s.Name).ToArray());
-            if (suppliersComboBox.Items.Count > 0)
-                suppliersComboBox.SelectedIndex = 0;
+            try
+            {
+                // FIXED: Added null checks and safe loading
+                suppliers = DatabaseContext.GetAllSuppliers() ?? new List<Supplier>();
+                ingredients = DatabaseContext.GetAllIngredients() ?? new List<Ingredient>();
+                
+                LoadSuppliers();
+                SetupDataGridView();
+                UpdateReport();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading data: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // Initialize with empty lists to prevent further errors
+                suppliers = new List<Supplier>();
+                ingredients = new List<Ingredient>();
+            }
         }
 
-        private void LoadIngredients()
+        private void LoadSuppliers()
         {
-            ingredients = DatabaseContext.GetAllIngredients();
+            try
+            {
+                suppliersComboBox.Items.Clear();
+                
+                // FIXED: Added null check and empty collection handling
+                if (suppliers != null && suppliers.Any())
+                {
+                    suppliersComboBox.Items.AddRange(suppliers.Select(s => s.Name).ToArray());
+                    if (suppliersComboBox.Items.Count > 0)
+                        suppliersComboBox.SelectedIndex = 0;
+                }
+                else
+                {
+                    suppliersComboBox.Items.Add("No suppliers available");
+                    suppliersComboBox.SelectedIndex = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading suppliers list: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void SetupDataGridView()
@@ -130,65 +162,93 @@ namespace CostChef
 
         private void UpdateReport()
         {
-            if (reportTypeComboBox.SelectedItem?.ToString() == "All Suppliers")
+            try
             {
-                LoadAllSuppliersReport();
+                if (reportTypeComboBox.SelectedItem?.ToString() == "All Suppliers")
+                {
+                    LoadAllSuppliersReport();
+                }
+                else
+                {
+                    LoadSupplierReport();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                LoadSupplierReport();
+                MessageBox.Show($"Error updating report: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void LoadAllSuppliersReport()
         {
-            reportsDataGridView.Columns.Clear();
-            reportsDataGridView.Columns.AddRange(
-                new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 25 },
-                new DataGridViewTextBoxColumn { HeaderText = "Ingredients", DataPropertyName = "IngredientCount", FillWeight = 15 },
-                new DataGridViewTextBoxColumn { HeaderText = "Total Value", DataPropertyName = "TotalValue", FillWeight = 20 },
-                new DataGridViewTextBoxColumn { HeaderText = "Contact", DataPropertyName = "Contact", FillWeight = 20 },
-                new DataGridViewTextBoxColumn { HeaderText = "Phone", DataPropertyName = "Phone", FillWeight = 20 }
-            );
-
-            var reportData = new List<dynamic>();
-            foreach (var supplier in suppliers)
+            try
             {
-                var supplierIngredients = ingredients.Where(i => i.SupplierId == supplier.Id).ToList();
-                var stats = DatabaseContext.GetSupplierStatistics(supplier.Id);
-                
-                reportData.Add(new
-                {
-                    SupplierName = supplier.Name,
-                    IngredientCount = supplierIngredients.Count,
-                    TotalValue = supplierIngredients.Sum(i => i.UnitPrice).ToString("C2"),
-                    Contact = supplier.ContactPerson ?? "N/A",
-                    Phone = supplier.Phone ?? "N/A"
-                });
-            }
+                reportsDataGridView.Columns.Clear();
+                reportsDataGridView.Columns.AddRange(
+                    new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 25 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Ingredients", DataPropertyName = "IngredientCount", FillWeight = 15 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Total Value", DataPropertyName = "TotalValue", FillWeight = 20 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Contact", DataPropertyName = "Contact", FillWeight = 20 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Phone", DataPropertyName = "Phone", FillWeight = 20 }
+                );
 
-            reportsDataGridView.DataSource = reportData;
+                var reportData = new List<dynamic>();
+                
+                // FIXED: Added null check
+                if (suppliers != null)
+                {
+                    foreach (var supplier in suppliers)
+                    {
+                        var supplierIngredients = ingredients?.Where(i => i.SupplierId == supplier.Id).ToList() ?? new List<Ingredient>();
+                        
+                        reportData.Add(new
+                        {
+                            SupplierName = supplier.Name ?? "Unknown",
+                            IngredientCount = supplierIngredients.Count,
+                            TotalValue = supplierIngredients.Sum(i => i.UnitPrice).ToString("C2"),
+                            Contact = supplier.ContactPerson ?? "N/A",
+                            Phone = supplier.Phone ?? "N/A"
+                        });
+                    }
+                }
+
+                reportsDataGridView.DataSource = reportData;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading all suppliers report: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void LoadSupplierReport()
         {
-            if (suppliersComboBox.SelectedItem == null) return;
+            try
+            {
+                if (suppliersComboBox.SelectedItem == null) return;
 
-            var selectedSupplierName = suppliersComboBox.SelectedItem.ToString();
-            var supplier = suppliers.FirstOrDefault(s => s.Name == selectedSupplierName);
-            if (supplier == null) return;
+                var selectedSupplierName = suppliersComboBox.SelectedItem.ToString();
+                var supplier = suppliers?.FirstOrDefault(s => s.Name == selectedSupplierName);
+                if (supplier == null) return;
 
-            reportsDataGridView.Columns.Clear();
-            reportsDataGridView.Columns.AddRange(
-                new DataGridViewTextBoxColumn { HeaderText = "Ingredient", DataPropertyName = "Name", FillWeight = 30 },
-                new DataGridViewTextBoxColumn { HeaderText = "Unit", DataPropertyName = "Unit", FillWeight = 15 },
-                new DataGridViewTextBoxColumn { HeaderText = "Unit Price", DataPropertyName = "UnitPrice", FillWeight = 20 },
-                new DataGridViewTextBoxColumn { HeaderText = "Category", DataPropertyName = "Category", FillWeight = 20 },
-                new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 15 }
-            );
+                reportsDataGridView.Columns.Clear();
+                reportsDataGridView.Columns.AddRange(
+                    new DataGridViewTextBoxColumn { HeaderText = "Ingredient", DataPropertyName = "Name", FillWeight = 30 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Unit", DataPropertyName = "Unit", FillWeight = 15 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Unit Price", DataPropertyName = "UnitPrice", FillWeight = 20 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Category", DataPropertyName = "Category", FillWeight = 20 },
+                    new DataGridViewTextBoxColumn { HeaderText = "Supplier", DataPropertyName = "SupplierName", FillWeight = 15 }
+                );
 
-            var supplierIngredients = ingredients.Where(i => i.SupplierId == supplier.Id).ToList();
-            reportsDataGridView.DataSource = supplierIngredients;
+                var supplierIngredients = ingredients?.Where(i => i.SupplierId == supplier.Id).ToList() ?? new List<Ingredient>();
+                reportsDataGridView.DataSource = supplierIngredients;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading supplier report: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }
