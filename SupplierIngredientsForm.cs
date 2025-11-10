@@ -26,6 +26,11 @@ namespace CostChef
         {
             _selectedSupplierId = supplierId;
             AutoSelectSupplier(supplierId);
+            // Load ingredients immediately after auto-selecting
+            if (cmbSuppliers.SelectedItem != null)
+            {
+                LoadSupplierIngredients(supplierId);
+            }
         }
 
         private void InitializeComponent()
@@ -214,9 +219,10 @@ namespace CostChef
 
         private void CmbSuppliers_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (cmbSuppliers.SelectedValue != null && cmbSuppliers.SelectedValue is int supplierId)
+            // FIXED: Get supplier ID from SelectedItem, not SelectedValue
+            if (cmbSuppliers.SelectedItem is Supplier selectedSupplier)
             {
-                LoadSupplierIngredients(supplierId);
+                LoadSupplierIngredients(selectedSupplier.Id);
                 btnRemoveAssignment.Enabled = false; // Reset on supplier change
             }
         }
@@ -257,7 +263,7 @@ namespace CostChef
             // Confirmation dialog
             var result = MessageBox.Show(
                 $"Remove supplier assignment from {selectedIngredients.Count} ingredient(s)?\n\n" +
-                "This will unlink these ingredients from {currentSupplier.Name} but keep the ingredients in your inventory.",
+                $"This will unlink these ingredients from {currentSupplier.Name} but keep the ingredients in your inventory.",
                 "Confirm Remove Supplier Assignment",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);

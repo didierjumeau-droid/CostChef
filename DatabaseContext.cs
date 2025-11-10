@@ -27,7 +27,7 @@ namespace CostChef
                     string createIngredientsTable = @"
                         CREATE TABLE IF NOT EXISTS ingredients (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            name TEXT NOT NULL,
+                            name TEXT NOT NULL UNIQUE,
                             unit TEXT NOT NULL,
                             unit_price REAL NOT NULL,
                             category TEXT,
@@ -59,26 +59,22 @@ namespace CostChef
                             target_food_cost_percentage REAL DEFAULT 30.0
                         )";
 
-// First, let's add the database schema changes to DatabaseContext.cs
-// Add this to the InitializeDatabase() method:
+                    // Create recipe_versions table
+                    string createRecipeVersionsTable = @"
+                        CREATE TABLE IF NOT EXISTS recipe_versions (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            recipe_id INTEGER NOT NULL,
+                            version_number INTEGER NOT NULL,
+                            version_name TEXT,
+                            version_notes TEXT,
+                            created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            created_by TEXT DEFAULT 'System',
+                            is_current BOOLEAN DEFAULT 0,
+                            recipe_data TEXT NOT NULL,
+                            FOREIGN KEY (recipe_id) REFERENCES recipes (id)
+                        )";
 
-string createRecipeVersionsTable = @"
-    CREATE TABLE IF NOT EXISTS recipe_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        recipe_id INTEGER NOT NULL,
-        version_number INTEGER NOT NULL,
-        version_name TEXT,
-        version_notes TEXT,
-        created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        created_by TEXT DEFAULT 'System',
-        is_current BOOLEAN DEFAULT 0,
-        recipe_data TEXT NOT NULL, -- JSON serialized recipe and ingredients
-        FOREIGN KEY (recipe_id) REFERENCES recipes (id)
-    )";
-
-command.CommandText = createRecipeVersionsTable;
-command.ExecuteNonQuery();                    
-// Create recipe_ingredients table
+                    // Create recipe_ingredients table
                     string createRecipeIngredientsTable = @"
                         CREATE TABLE IF NOT EXISTS recipe_ingredients (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,7 +93,8 @@ command.ExecuteNonQuery();
                             contact_person TEXT,
                             phone TEXT,
                             email TEXT,
-                            address TEXT
+                            address TEXT,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                         )";
 
                     // Create settings table
@@ -107,6 +104,7 @@ command.ExecuteNonQuery();
                             value TEXT
                         )";
 
+                    // Execute all table creation commands
                     command.CommandText = createIngredientsTable;
                     command.ExecuteNonQuery();
 
@@ -114,6 +112,9 @@ command.ExecuteNonQuery();
                     command.ExecuteNonQuery();
 
                     command.CommandText = createRecipesTable;
+                    command.ExecuteNonQuery();
+
+                    command.CommandText = createRecipeVersionsTable;
                     command.ExecuteNonQuery();
 
                     command.CommandText = createRecipeIngredientsTable;
@@ -132,7 +133,7 @@ command.ExecuteNonQuery();
 
         public static void RecordPriceChange(int ingredientId, decimal oldPrice, decimal newPrice, string changedBy = "System", string reason = "")
         {
-            if (oldPrice == newPrice) return; // No change, no record
+            if (oldPrice == newPrice) return;
 
             using (var connection = new SQLiteConnection(_connectionString))
             {
@@ -190,46 +191,6 @@ command.ExecuteNonQuery();
             return priceHistory;
         }
 
-        public static void UpdateIngredient(Ingredient ingredient)
-        {
-            using (var connection = new SQLiteConnection(_connectionString))
-            {
-                connection.Open();
-                
-                // Get the current price before updating
-                decimal oldPrice = 0;
-                string getOldPriceQuery = "SELECT unit_price FROM ingredients WHERE id = @id";
-                using (var getPriceCommand = new SQLiteCommand(getOldPriceQuery, connection))
-                {
-                    getPriceCommand.Parameters.AddWithValue("@id", ingredient.Id);
-                    var result = getPriceCommand.ExecuteScalar();
-                    if (result != null)
-                    {
-                        oldPrice = Convert.ToDecimal(result);
-                    }
-                }
-
-                string query = "UPDATE ingredients SET name = @name, unit = @unit, unit_price = @unit_price, category = @category, supplier_id = @supplier_id WHERE id = @id";
-
-                using (var command = new SQLiteCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@name", ingredient.Name);
-                    command.Parameters.AddWithValue("@unit", ingredient.Unit);
-                    command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
-                    command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
-                    command.Parameters.AddWithValue("@supplier_id", ingredient.SupplierId ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@id", ingredient.Id);
-                    command.ExecuteNonQuery();
-                }
-
-                // Record price change if the price actually changed
-                if (oldPrice != ingredient.UnitPrice)
-                {
-                    RecordPriceChange(ingredient.Id, oldPrice, ingredient.UnitPrice, "User", "Price update");
-                }
-            }
-        }
-
         public static List<PriceHistory> GetRecentPriceChanges(int limit = 50)
         {
             var priceHistory = new List<PriceHistory>();
@@ -261,9 +222,6 @@ command.ExecuteNonQuery();
                                 ChangedBy = SafeGetString(reader, "changed_by"),
                                 Reason = SafeGetString(reader, "reason")
                             };
-                            
-                            // Add ingredient name for display
-                            history.GetType().GetProperty("IngredientName")?.SetValue(history, SafeGetString(reader, "ingredient_name"));
                             
                             priceHistory.Add(history);
                         }
@@ -326,7 +284,9 @@ command.ExecuteNonQuery();
                 {
                     connection.Open();
                     
-                    string query = "SELECT id, name, contact_person, phone, email, address FROM suppliers ORDER BY name";
+                    string query = @"SELECT id, name, contact_person, phone, email, address, 
+                                   COALESCE(created_at, datetime('now')) as created_at 
+                                   FROM suppliers ORDER BY name";
 
                     using (var command = new SQLiteCommand(query, connection))
                     using (var reader = command.ExecuteReader())
@@ -341,7 +301,7 @@ command.ExecuteNonQuery();
                                 Phone = SafeGetString(reader, "phone"),
                                 Email = SafeGetString(reader, "email"),
                                 Address = SafeGetString(reader, "address"),
-                                CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                                CreatedAt = SafeGetString(reader, "created_at")
                             };
                             
                             suppliers.Add(supplier);
@@ -405,6 +365,7 @@ command.ExecuteNonQuery();
             {
                 connection.Open();
                 
+                // Remove supplier references from ingredients
                 string updateIngredients = "UPDATE ingredients SET supplier_id = NULL WHERE supplier_id = @supplierId";
                 using (var command = new SQLiteCommand(updateIngredients, connection))
                 {
@@ -412,6 +373,7 @@ command.ExecuteNonQuery();
                     command.ExecuteNonQuery();
                 }
 
+                // Delete supplier
                 string deleteSupplier = "DELETE FROM suppliers WHERE id = @id";
                 using (var command = new SQLiteCommand(deleteSupplier, connection))
                 {
@@ -426,7 +388,7 @@ command.ExecuteNonQuery();
             using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
-                string query = "SELECT id, name, contact_person, phone, email, address FROM suppliers WHERE name = @name";
+                string query = "SELECT * FROM suppliers WHERE name = @name";
 
                 using (var command = new SQLiteCommand(query, connection))
                 {
@@ -443,7 +405,7 @@ command.ExecuteNonQuery();
                                 Phone = SafeGetString(reader, "phone"),
                                 Email = SafeGetString(reader, "email"),
                                 Address = SafeGetString(reader, "address"),
-                                CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                                CreatedAt = SafeGetString(reader, "created_at")
                             };
                         }
                     }
@@ -551,7 +513,8 @@ command.ExecuteNonQuery();
             using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
-                string query = "INSERT INTO ingredients (name, unit, unit_price, category, supplier_id) VALUES (@name, @unit, @unit_price, @category, @supplier_id)";
+                string query = @"INSERT INTO ingredients (name, unit, unit_price, category, supplier_id) 
+                               VALUES (@name, @unit, @unit_price, @category, @supplier_id)";
 
                 using (var command = new SQLiteCommand(query, connection))
                 {
@@ -559,8 +522,57 @@ command.ExecuteNonQuery();
                     command.Parameters.AddWithValue("@unit", ingredient.Unit);
                     command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
                     command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
-                    command.Parameters.AddWithValue("@supplier_id", ingredient.SupplierId ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@supplier_id", 
+                        ingredient.SupplierId.HasValue && ingredient.SupplierId.Value > 0 
+                            ? (object)ingredient.SupplierId.Value 
+                            : DBNull.Value);
                     command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public static void UpdateIngredient(Ingredient ingredient)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                
+                // Get old price for history
+                decimal oldPrice = 0;
+                string getOldPriceQuery = "SELECT unit_price FROM ingredients WHERE id = @id";
+                using (var getPriceCommand = new SQLiteCommand(getOldPriceQuery, connection))
+                {
+                    getPriceCommand.Parameters.AddWithValue("@id", ingredient.Id);
+                    var result = getPriceCommand.ExecuteScalar();
+                    if (result != null)
+                    {
+                        oldPrice = Convert.ToDecimal(result);
+                    }
+                }
+
+                string query = @"UPDATE ingredients 
+                               SET name = @name, unit = @unit, unit_price = @unit_price, 
+                                   category = @category, supplier_id = @supplier_id 
+                               WHERE id = @id";
+
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@name", ingredient.Name);
+                    command.Parameters.AddWithValue("@unit", ingredient.Unit);
+                    command.Parameters.AddWithValue("@unit_price", ingredient.UnitPrice);
+                    command.Parameters.AddWithValue("@category", ingredient.Category ?? "");
+                    command.Parameters.AddWithValue("@supplier_id", 
+                        ingredient.SupplierId.HasValue && ingredient.SupplierId.Value > 0 
+                            ? (object)ingredient.SupplierId.Value 
+                            : DBNull.Value);
+                    command.Parameters.AddWithValue("@id", ingredient.Id);
+                    command.ExecuteNonQuery();
+                }
+
+                // Record price change if needed
+                if (oldPrice != ingredient.UnitPrice)
+                {
+                    RecordPriceChange(ingredient.Id, oldPrice, ingredient.UnitPrice, "User", "Price update");
                 }
             }
         }
@@ -571,6 +583,7 @@ command.ExecuteNonQuery();
             {
                 connection.Open();
 
+                // Delete from recipe_ingredients first
                 string deleteRecipeIngredients = "DELETE FROM recipe_ingredients WHERE ingredient_id = @ingredientId";
                 using (var command = new SQLiteCommand(deleteRecipeIngredients, connection))
                 {
@@ -578,6 +591,7 @@ command.ExecuteNonQuery();
                     command.ExecuteNonQuery();
                 }
 
+                // Delete the ingredient
                 string deleteIngredient = "DELETE FROM ingredients WHERE id = @id";
                 using (var command = new SQLiteCommand(deleteIngredient, connection))
                 {
@@ -614,6 +628,35 @@ command.ExecuteNonQuery();
             }
 
             return categories ?? new List<string>();
+        }
+
+        public static List<string> GetIngredientUnits()
+        {
+            var units = new List<string>();
+
+            try
+            {
+                using (var connection = new SQLiteConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT DISTINCT unit FROM ingredients WHERE unit IS NOT NULL AND unit != '' ORDER BY unit";
+
+                    using (var command = new SQLiteCommand(query, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            units.Add(SafeGetString(reader, "unit"));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading ingredient units: {ex.Message}");
+            }
+
+            return units ?? new List<string>();
         }
 
         // ========== RECIPE METHODS ==========
@@ -661,7 +704,8 @@ command.ExecuteNonQuery();
             using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
-                string query = "INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) VALUES (@name, @description, @category, @tags, @batch_yield, @target_food_cost_percentage)";
+                string query = @"INSERT INTO recipes (name, description, category, tags, batch_yield, target_food_cost_percentage) 
+                               VALUES (@name, @description, @category, @tags, @batch_yield, @target_food_cost_percentage)";
 
                 using (var command = new SQLiteCommand(query, connection))
                 {
@@ -681,7 +725,10 @@ command.ExecuteNonQuery();
             using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
-                string query = "UPDATE recipes SET name = @name, description = @description, category = @category, tags = @tags, batch_yield = @batch_yield, target_food_cost_percentage = @target_food_cost_percentage WHERE id = @id";
+                string query = @"UPDATE recipes 
+                               SET name = @name, description = @description, category = @category, 
+                                   tags = @tags, batch_yield = @batch_yield, target_food_cost_percentage = @target_food_cost_percentage 
+                               WHERE id = @id";
 
                 using (var command = new SQLiteCommand(query, connection))
                 {
@@ -703,6 +750,7 @@ command.ExecuteNonQuery();
             {
                 connection.Open();
 
+                // Delete recipe ingredients first
                 string deleteRecipeIngredients = "DELETE FROM recipe_ingredients WHERE recipe_id = @recipeId";
                 using (var command = new SQLiteCommand(deleteRecipeIngredients, connection))
                 {
@@ -710,6 +758,7 @@ command.ExecuteNonQuery();
                     command.ExecuteNonQuery();
                 }
 
+                // Delete the recipe
                 string deleteRecipe = "DELETE FROM recipes WHERE id = @id";
                 using (var command = new SQLiteCommand(deleteRecipe, connection))
                 {
@@ -846,12 +895,10 @@ command.ExecuteNonQuery();
             }
         }
 
-// In DatabaseContext.cs - Add this method:
-
-public static SQLiteConnection GetConnection()
-{
-    return new SQLiteConnection(_connectionString);
-}
+        public static SQLiteConnection GetConnection()
+        {
+            return new SQLiteConnection(_connectionString);
+        }
 
         // ========== SAFE DATA READER METHODS ==========
 

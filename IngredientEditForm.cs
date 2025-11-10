@@ -1,13 +1,14 @@
 using System;
 using System.Windows.Forms;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace CostChef
 {
     public partial class IngredientEditForm : Form
     {
         private TextBox txtName;
-        private TextBox txtUnit;
+        private ComboBox cmbUnit;
         private TextBox txtUnitPrice;
         private ComboBox cmbCategory;
         private ComboBox cmbSupplier;
@@ -24,6 +25,7 @@ namespace CostChef
             InitializeComponent();
             LoadSuppliers();
             LoadCategories();
+            LoadUnits();
         }
 
         public IngredientEditForm(Ingredient ingredient)
@@ -33,13 +35,14 @@ namespace CostChef
             InitializeComponent();
             LoadSuppliers();
             LoadCategories();
+            LoadUnits();
             LoadIngredientData();
         }
 
         private void InitializeComponent()
         {
             this.txtName = new TextBox();
-            this.txtUnit = new TextBox();
+            this.cmbUnit = new ComboBox();
             this.txtUnitPrice = new TextBox();
             this.cmbCategory = new ComboBox();
             this.cmbSupplier = new ComboBox();
@@ -58,14 +61,12 @@ namespace CostChef
             var lblName = new Label { Text = "Name:", Location = new System.Drawing.Point(20, 20), AutoSize = true };
             this.txtName.Location = new System.Drawing.Point(120, 17);
             this.txtName.Size = new System.Drawing.Size(250, 20);
-            this.txtName.MaxLength = 100;
 
             // Unit
             var lblUnit = new Label { Text = "Unit:", Location = new System.Drawing.Point(20, 50), AutoSize = true };
-            this.txtUnit.Location = new System.Drawing.Point(120, 47);
-            this.txtUnit.Size = new System.Drawing.Size(250, 20);
-            this.txtUnit.MaxLength = 20;
-            this.txtUnit.PlaceholderText = "e.g., gram, piece, ml";
+            this.cmbUnit.Location = new System.Drawing.Point(120, 47);
+            this.cmbUnit.Size = new System.Drawing.Size(250, 20);
+            this.cmbUnit.DropDownStyle = ComboBoxStyle.DropDownList;
 
             // Unit Price
             var lblUnitPrice = new Label { Text = "Unit Price:", Location = new System.Drawing.Point(20, 80), AutoSize = true };
@@ -87,18 +88,17 @@ namespace CostChef
 
             // Buttons
             this.btnSave.Text = "Save";
-            this.btnSave.DialogResult = DialogResult.OK;
             this.btnSave.Location = new System.Drawing.Point(120, 180);
             this.btnSave.Size = new System.Drawing.Size(80, 30);
             this.btnSave.Click += (s, e) => SaveIngredient();
 
             this.btnCancel.Text = "Cancel";
-            this.btnCancel.DialogResult = DialogResult.Cancel;
             this.btnCancel.Location = new System.Drawing.Point(210, 180);
             this.btnCancel.Size = new System.Drawing.Size(80, 30);
+            this.btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
 
             this.Controls.AddRange(new Control[] {
-                lblName, txtName, lblUnit, txtUnit, lblUnitPrice, txtUnitPrice,
+                lblName, txtName, lblUnit, cmbUnit, lblUnitPrice, txtUnitPrice,
                 lblCategory, cmbCategory, lblSupplier, cmbSupplier,
                 btnSave, btnCancel
             });
@@ -113,52 +113,51 @@ namespace CostChef
         private void LoadIngredientData()
         {
             txtName.Text = currentIngredient.Name;
-            txtUnit.Text = currentIngredient.Unit;
             txtUnitPrice.Text = currentIngredient.UnitPrice.ToString("F4");
             cmbCategory.Text = currentIngredient.Category;
 
-            // Select supplier if exists
+            // Select unit
+            if (!string.IsNullOrEmpty(currentIngredient.Unit))
+            {
+                cmbUnit.SelectedItem = currentIngredient.Unit;
+            }
+
+            // Select supplier
             if (currentIngredient.SupplierId.HasValue)
             {
-                foreach (Supplier supplier in cmbSupplier.Items)
+                var supplier = cmbSupplier.Items.Cast<Supplier>().FirstOrDefault(s => s.Id == currentIngredient.SupplierId.Value);
+                if (supplier != null)
                 {
-                    if (supplier.Id == currentIngredient.SupplierId.Value)
-                    {
-                        cmbSupplier.SelectedItem = supplier;
-                        break;
-                    }
+                    cmbSupplier.SelectedItem = supplier;
                 }
             }
         }
 
-      private void LoadSuppliers()
-{
-    try
-    {
-        var suppliers = DatabaseContext.GetAllSuppliers();
-        cmbSupplier.Items.Clear();
-        
-        // Add empty supplier option first - use a proper Supplier object
-        cmbSupplier.Items.Add(new Supplier { Id = 0, Name = "" });
-        
-        // Add actual suppliers
-        foreach (var supplier in suppliers)
+        private void LoadSuppliers()
         {
-            cmbSupplier.Items.Add(supplier);
+            try
+            {
+                var suppliers = DatabaseContext.GetAllSuppliers();
+                cmbSupplier.Items.Clear();
+                
+                // Add empty option
+                cmbSupplier.Items.Add(new Supplier { Id = 0, Name = "(No Supplier)" });
+                
+                // Add suppliers
+                foreach (var supplier in suppliers)
+                {
+                    cmbSupplier.Items.Add(supplier);
+                }
+                
+                cmbSupplier.DisplayMember = "Name";
+                cmbSupplier.ValueMember = "Id";
+                cmbSupplier.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
-        
-        cmbSupplier.DisplayMember = "Name";
-        cmbSupplier.ValueMember = "Id";
-
-        if (cmbSupplier.Items.Count > 0)
-            cmbSupplier.SelectedIndex = 0;
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
-            MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-}
 
         private void LoadCategories()
         {
@@ -166,7 +165,7 @@ namespace CostChef
             {
                 var categories = DatabaseContext.GetIngredientCategories();
                 cmbCategory.Items.Clear();
-                cmbCategory.Items.Add(""); // Empty option
+                cmbCategory.Items.Add("");
                 foreach (var category in categories)
                 {
                     cmbCategory.Items.Add(category);
@@ -174,75 +173,91 @@ namespace CostChef
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading categories: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error loading categories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LoadUnits()
+        {
+            try
+            {
+                cmbUnit.Items.Clear();
+                
+                // Common units
+                var commonUnits = new List<string> { "gram", "kg", "piece", "ml", "liter", "cup", "tbsp", "tsp", "oz", "lb" };
+                foreach (var unit in commonUnits)
+                {
+                    cmbUnit.Items.Add(unit);
+                }
+
+                // Database units
+                try
+                {
+                    var dbUnits = DatabaseContext.GetIngredientUnits();
+                    foreach (var unit in dbUnits)
+                    {
+                        if (!cmbUnit.Items.Contains(unit))
+                            cmbUnit.Items.Add(unit);
+                    }
+                }
+                catch { }
+
+                cmbUnit.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading units: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void SaveIngredient()
         {
+            // Validate
             if (string.IsNullOrWhiteSpace(txtName.Text))
             {
-                MessageBox.Show("Please enter an ingredient name.", "Validation Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                txtName.Focus();
+                MessageBox.Show("Please enter an ingredient name.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(txtUnit.Text))
+            if (cmbUnit.SelectedItem == null)
             {
-                MessageBox.Show("Please enter a unit.", "Validation Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                txtUnit.Focus();
+                MessageBox.Show("Please select a unit.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             if (!decimal.TryParse(txtUnitPrice.Text, out decimal unitPrice) || unitPrice < 0)
             {
-                MessageBox.Show("Please enter a valid unit price.", "Validation Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                txtUnitPrice.Focus();
+                MessageBox.Show("Please enter a valid unit price.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             try
             {
                 currentIngredient.Name = txtName.Text.Trim();
-                currentIngredient.Unit = txtUnit.Text.Trim();
+                currentIngredient.Unit = cmbUnit.SelectedItem.ToString();
                 currentIngredient.UnitPrice = unitPrice;
                 currentIngredient.Category = cmbCategory.Text.Trim();
 
-                // Set supplier (optional)
-             // Set supplier (optional)
-if (cmbSupplier.SelectedItem != null)
-{
-    // Check if it's a Supplier object (not the empty option)
-    if (cmbSupplier.SelectedItem is Supplier selectedSupplier)
-    {
-        currentIngredient.SupplierId = selectedSupplier.Id;
-    }
-    else
-    {
-        // It's the empty option or some other non-supplier item
-        currentIngredient.SupplierId = null;
-    }
-}
-else
-{
-    currentIngredient.SupplierId = null;
-}
+                // Supplier
+                if (cmbSupplier.SelectedItem is Supplier selectedSupplier && selectedSupplier.Id > 0)
+                {
+                    currentIngredient.SupplierId = selectedSupplier.Id;
+                }
+                else
+                {
+                    currentIngredient.SupplierId = null;
+                }
 
+                // Save
                 if (isEditMode)
                 {
                     DatabaseContext.UpdateIngredient(currentIngredient);
-                    MessageBox.Show("Ingredient updated successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Updated successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
                     DatabaseContext.InsertIngredient(currentIngredient);
-                    MessageBox.Show("Ingredient added successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Added successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
 
                 this.DialogResult = DialogResult.OK;
@@ -250,8 +265,7 @@ else
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving ingredient: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
