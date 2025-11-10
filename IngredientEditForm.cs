@@ -131,29 +131,34 @@ namespace CostChef
             }
         }
 
-        private void LoadSuppliers()
+      private void LoadSuppliers()
+{
+    try
+    {
+        var suppliers = DatabaseContext.GetAllSuppliers();
+        cmbSupplier.Items.Clear();
+        
+        // Add empty supplier option first - use a proper Supplier object
+        cmbSupplier.Items.Add(new Supplier { Id = 0, Name = "" });
+        
+        // Add actual suppliers
+        foreach (var supplier in suppliers)
         {
-            try
-            {
-                var suppliers = DatabaseContext.GetAllSuppliers();
-                cmbSupplier.Items.Clear();
-                cmbSupplier.Items.Add(""); // Empty option for no supplier
-                foreach (var supplier in suppliers)
-                {
-                    cmbSupplier.Items.Add(supplier);
-                }
-                cmbSupplier.DisplayMember = "Name";
-                cmbSupplier.ValueMember = "Id";
-
-                if (cmbSupplier.Items.Count > 0)
-                    cmbSupplier.SelectedIndex = 0;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            cmbSupplier.Items.Add(supplier);
         }
+        
+        cmbSupplier.DisplayMember = "Name";
+        cmbSupplier.ValueMember = "Id";
+
+        if (cmbSupplier.Items.Count > 0)
+            cmbSupplier.SelectedIndex = 0;
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
+            MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+}
 
         private void LoadCategories()
         {
@@ -208,14 +213,24 @@ namespace CostChef
                 currentIngredient.Category = cmbCategory.Text.Trim();
 
                 // Set supplier (optional)
-                if (cmbSupplier.SelectedItem is Supplier selectedSupplier && !string.IsNullOrEmpty(selectedSupplier.Name))
-                {
-                    currentIngredient.SupplierId = selectedSupplier.Id;
-                }
-                else
-                {
-                    currentIngredient.SupplierId = null;
-                }
+             // Set supplier (optional)
+if (cmbSupplier.SelectedItem != null)
+{
+    // Check if it's a Supplier object (not the empty option)
+    if (cmbSupplier.SelectedItem is Supplier selectedSupplier)
+    {
+        currentIngredient.SupplierId = selectedSupplier.Id;
+    }
+    else
+    {
+        // It's the empty option or some other non-supplier item
+        currentIngredient.SupplierId = null;
+    }
+}
+else
+{
+    currentIngredient.SupplierId = null;
+}
 
                 if (isEditMode)
                 {

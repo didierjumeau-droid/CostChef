@@ -1,19 +1,24 @@
 using System;
-using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
+using System.Windows.Forms;
 
 namespace CostChef
 {
     public partial class SupplierManagementForm : Form
     {
+        private List<Supplier> suppliers;
         private DataGridView dataGridViewSuppliers;
         private Button btnAddSupplier;
         private Button btnEditSupplier;
         private Button btnDeleteSupplier;
         private Button btnViewIngredients;
+        private Button btnReports;
         private Button btnClose;
         private TextBox txtSearch;
+        private Button btnSearch;
+        private System.ComponentModel.IContainer components = null;
 
         public SupplierManagementForm()
         {
@@ -23,192 +28,356 @@ namespace CostChef
 
         private void InitializeComponent()
         {
-            this.dataGridViewSuppliers = new DataGridView();
-            this.btnAddSupplier = new Button();
-            this.btnEditSupplier = new Button();
-            this.btnDeleteSupplier = new Button();
-            this.btnViewIngredients = new Button();
-            this.btnClose = new Button();
-            this.txtSearch = new TextBox();
-
-            this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(700, 500);
-            this.Text = "Manage Suppliers";
+            this.components = new System.ComponentModel.Container();
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(900, 600);
+            this.Text = "Supplier Management";
             this.StartPosition = FormStartPosition.CenterParent;
+            this.MinimumSize = new System.Drawing.Size(900, 600);
 
-            // Search
-            var lblSearch = new Label { Text = "Search:", Location = new System.Drawing.Point(12, 15), AutoSize = true };
-            this.txtSearch.Location = new System.Drawing.Point(60, 12);
-            this.txtSearch.Size = new System.Drawing.Size(150, 20);
-            this.txtSearch.TextChanged += (s, e) => LoadSuppliers();
+            // Main layout panel
+            var mainPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
+            this.Controls.Add(mainPanel);
 
-            // DataGrid
-            this.dataGridViewSuppliers.Location = new System.Drawing.Point(12, 40);
-            this.dataGridViewSuppliers.Size = new System.Drawing.Size(676, 350);
-            this.dataGridViewSuppliers.ReadOnly = true;
-            this.dataGridViewSuppliers.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridViewSuppliers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            // Title
+            var lblTitle = new Label 
+            { 
+                Text = "Supplier Management",
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(10, 10)
+            };
+            mainPanel.Controls.Add(lblTitle);
 
-            // Buttons
-            this.btnAddSupplier.Location = new System.Drawing.Point(12, 410);
-            this.btnAddSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnAddSupplier.Text = "Add Supplier";
-            this.btnAddSupplier.Click += (s, e) => AddSupplier();
+            // Search panel
+            var searchPanel = new Panel
+            {
+                Location = new Point(10, 50),
+                Size = new System.Drawing.Size(860, 35),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            mainPanel.Controls.Add(searchPanel);
 
-            this.btnEditSupplier.Location = new System.Drawing.Point(122, 410);
-            this.btnEditSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnEditSupplier.Text = "Edit Supplier";
-            this.btnEditSupplier.Click += (s, e) => EditSupplier();
+            var lblSearch = new Label 
+            { 
+                Text = "Search:",
+                Location = new Point(10, 8),
+                AutoSize = true
+            };
+            searchPanel.Controls.Add(lblSearch);
 
-            this.btnDeleteSupplier.Location = new System.Drawing.Point(232, 410);
-            this.btnDeleteSupplier.Size = new System.Drawing.Size(100, 30);
-            this.btnDeleteSupplier.Text = "Delete Supplier";
-            this.btnDeleteSupplier.Click += (s, e) => DeleteSupplier();
+            txtSearch = new TextBox
+            {
+                Location = new Point(60, 5),
+                Size = new System.Drawing.Size(200, 20)
+            };
+            txtSearch.TextChanged += TxtSearch_TextChanged;
+            searchPanel.Controls.Add(txtSearch);
 
-            this.btnViewIngredients.Location = new System.Drawing.Point(342, 410);
-            this.btnViewIngredients.Size = new System.Drawing.Size(120, 30);
-            this.btnViewIngredients.Text = "View Ingredients";
-            this.btnViewIngredients.Click += (s, e) => ViewSupplierIngredients();
+            btnSearch = new Button
+            {
+                Text = "Clear",
+                Location = new Point(270, 5),
+                Size = new System.Drawing.Size(60, 23)
+            };
+            btnSearch.Click += BtnSearch_Click;
+            searchPanel.Controls.Add(btnSearch);
 
-            this.btnClose.Location = new System.Drawing.Point(588, 410);
-            this.btnClose.Size = new System.Drawing.Size(100, 30);
-            this.btnClose.Text = "Close";
-            this.btnClose.Click += (s, e) => this.Close();
+            // DataGridView
+            dataGridViewSuppliers = new DataGridView
+            {
+                Location = new Point(10, 100),
+                Size = new System.Drawing.Size(860, 350),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+                ReadOnly = true,
+                AutoGenerateColumns = false,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = false
+            };
 
-            this.Controls.AddRange(new Control[] {
-                lblSearch, txtSearch, dataGridViewSuppliers, btnAddSupplier, btnEditSupplier,
-                btnDeleteSupplier, btnViewIngredients, btnClose
+            // Configure columns
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colId", 
+                HeaderText = "ID", 
+                DataPropertyName = "Id",
+                Width = 50 
+            });
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colName", 
+                HeaderText = "Name", 
+                DataPropertyName = "Name",
+                Width = 150 
+            });
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colContact", 
+                HeaderText = "Contact Person", 
+                DataPropertyName = "ContactPerson",
+                Width = 120 
+            });
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colPhone", 
+                HeaderText = "Phone", 
+                DataPropertyName = "Phone",
+                Width = 100 
+            });
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colEmail", 
+                HeaderText = "Email", 
+                DataPropertyName = "Email",
+                Width = 150 
+            });
+            dataGridViewSuppliers.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colAddress", 
+                HeaderText = "Address", 
+                DataPropertyName = "Address",
+                Width = 200 
             });
 
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            mainPanel.Controls.Add(dataGridViewSuppliers);
+
+            // Button panel
+            var buttonPanel = new Panel
+            {
+                Location = new Point(10, 460),
+                Size = new System.Drawing.Size(860, 40),
+                Anchor = AnchorStyles.Bottom
+            };
+            mainPanel.Controls.Add(buttonPanel);
+
+            btnAddSupplier = new Button
+            {
+                Text = "Add Supplier",
+                Location = new Point(0, 5),
+                Size = new System.Drawing.Size(100, 30)
+            };
+            btnAddSupplier.Click += BtnAddSupplier_Click;
+            buttonPanel.Controls.Add(btnAddSupplier);
+
+            btnEditSupplier = new Button
+            {
+                Text = "Edit Supplier",
+                Location = new Point(110, 5),
+                Size = new System.Drawing.Size(100, 30)
+            };
+            btnEditSupplier.Click += BtnEditSupplier_Click;
+            buttonPanel.Controls.Add(btnEditSupplier);
+
+            btnDeleteSupplier = new Button
+            {
+                Text = "Delete Supplier",
+                Location = new Point(220, 5),
+                Size = new System.Drawing.Size(100, 30)
+            };
+            btnDeleteSupplier.Click += BtnDeleteSupplier_Click;
+            buttonPanel.Controls.Add(btnDeleteSupplier);
+
+            btnViewIngredients = new Button
+            {
+                Text = "View Ingredients",
+                Location = new Point(330, 5),
+                Size = new System.Drawing.Size(120, 30)
+            };
+            btnViewIngredients.Click += BtnViewIngredients_Click;
+            buttonPanel.Controls.Add(btnViewIngredients);
+
+            btnReports = new Button
+            {
+                Text = "Reports",
+                Location = new Point(460, 5),
+                Size = new System.Drawing.Size(80, 30)
+            };
+            btnReports.Click += BtnReports_Click;
+            buttonPanel.Controls.Add(btnReports);
+
+            btnClose = new Button
+            {
+                Text = "Close",
+                Location = new Point(770, 5),
+                Size = new System.Drawing.Size(80, 30)
+            };
+            btnClose.Click += BtnClose_Click;
+            buttonPanel.Controls.Add(btnClose);
+
+            // Status label
+            var lblStatus = new Label
+            {
+                Location = new Point(10, 510),
+                Size = new System.Drawing.Size(400, 20),
+                Anchor = AnchorStyles.Bottom,
+                Text = "Select a supplier to manage"
+            };
+            mainPanel.Controls.Add(lblStatus);
         }
 
         private void LoadSuppliers()
         {
             try
             {
-                var suppliers = DatabaseContext.GetAllSuppliers();
-                
-                var searchTerm = txtSearch.Text.ToLower();
-                if (!string.IsNullOrEmpty(searchTerm))
-                {
-                    suppliers = suppliers.Where(s => 
-                        s.Name.ToLower().Contains(searchTerm) ||
-                        s.ContactPerson.ToLower().Contains(searchTerm) ||
-                        s.Email.ToLower().Contains(searchTerm)
-                    ).ToList();
-                }
-
+                suppliers = DatabaseContext.GetAllSuppliers();
                 dataGridViewSuppliers.DataSource = suppliers;
+                UpdateStatus($"Loaded {suppliers.Count} suppliers");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus("Error loading suppliers");
             }
         }
 
-        private void AddSupplier()
+        private void BtnAddSupplier_Click(object sender, EventArgs e)
         {
-            try
+            var editForm = new SupplierEditForm();
+            if (editForm.ShowDialog() == DialogResult.OK)
             {
-                using (var form = new SupplierEditForm())
-                {
-                    if (form.ShowDialog() == DialogResult.OK)
-                    {
-                        LoadSuppliers();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error adding supplier: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LoadSuppliers(); // Refresh the list
+                UpdateStatus("Supplier added successfully");
             }
         }
 
-        private void EditSupplier()
+        private void BtnEditSupplier_Click(object sender, EventArgs e)
         {
             if (dataGridViewSuppliers.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Please select a supplier to edit.", "Information", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Please select a supplier to edit.", "Selection Required", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            try
+            var selectedRow = dataGridViewSuppliers.SelectedRows[0];
+            if (selectedRow.DataBoundItem is Supplier supplier)
             {
-                var supplier = (Supplier)dataGridViewSuppliers.SelectedRows[0].DataBoundItem;
-                using (var form = new SupplierEditForm(supplier))
+                var editForm = new SupplierEditForm(supplier);
+                if (editForm.ShowDialog() == DialogResult.OK)
                 {
-                    if (form.ShowDialog() == DialogResult.OK)
-                    {
-                        LoadSuppliers();
-                    }
+                    LoadSuppliers(); // Refresh the list
+                    UpdateStatus("Supplier updated successfully");
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error editing supplier: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void DeleteSupplier()
+        private void BtnDeleteSupplier_Click(object sender, EventArgs e)
         {
             if (dataGridViewSuppliers.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Please select a supplier to delete.", "Information", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Please select a supplier to delete.", "Selection Required", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            try
+            var selectedRow = dataGridViewSuppliers.SelectedRows[0];
+            if (selectedRow.DataBoundItem is Supplier supplier)
             {
-                var supplier = (Supplier)dataGridViewSuppliers.SelectedRows[0].DataBoundItem;
-                var result = MessageBox.Show($"Are you sure you want to delete {supplier.Name}?", 
-                    "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                var result = MessageBox.Show(
+                    $"Are you sure you want to delete supplier '{supplier.Name}'?",
+                    "Confirm Delete",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
 
                 if (result == DialogResult.Yes)
                 {
-                    DatabaseContext.DeleteSupplier(supplier.Id);
-                    LoadSuppliers();
-                    MessageBox.Show("Supplier deleted successfully.", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    try
+                    {
+                        DatabaseContext.DeleteSupplier(supplier.Id);
+                        LoadSuppliers(); // Refresh the list
+                        UpdateStatus("Supplier deleted successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error deleting supplier: {ex.Message}", "Error", 
+                                      MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error deleting supplier: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ViewSupplierIngredients()
+        private void BtnViewIngredients_Click(object sender, EventArgs e)
         {
             if (dataGridViewSuppliers.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Please select a supplier to view ingredients.", "Information", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Please select a supplier to view ingredients.", "Selection Required", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            try
+            var selectedRow = dataGridViewSuppliers.SelectedRows[0];
+            if (selectedRow.DataBoundItem is Supplier supplier)
             {
-                var supplier = (Supplier)dataGridViewSuppliers.SelectedRows[0].DataBoundItem;
-                
-                // FIXED: Now passes the selected supplier to the form
-                using (var form = new SupplierIngredientsForm(supplier))
-                {
-                    form.ShowDialog();
-                }
+                // FIXED: Pass the supplier ID to the ingredients form
+                var ingredientsForm = new SupplierIngredientsForm(supplier.Id);
+                ingredientsForm.ShowDialog();
             }
-            catch (Exception ex)
+        }
+
+        private void BtnReports_Click(object sender, EventArgs e)
+        {
+            var reportsForm = new SupplierReportsForm();
+            reportsForm.ShowDialog();
+        }
+
+        private void BtnClose_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        {
+            FilterSuppliers();
+        }
+
+        private void BtnSearch_Click(object sender, EventArgs e)
+        {
+            txtSearch.Text = string.Empty;
+            FilterSuppliers();
+        }
+
+        private void FilterSuppliers()
+        {
+            if (suppliers == null) return;
+
+            var searchText = txtSearch.Text.Trim().ToLower();
+            if (string.IsNullOrEmpty(searchText))
             {
-                MessageBox.Show($"Error viewing supplier ingredients: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                dataGridViewSuppliers.DataSource = suppliers;
             }
+            else
+            {
+                var filtered = suppliers.Where(s =>
+                    s.Name.ToLower().Contains(searchText) ||
+                    (s.ContactPerson ?? "").ToLower().Contains(searchText) ||
+                    (s.Phone ?? "").ToLower().Contains(searchText) ||
+                    (s.Email ?? "").ToLower().Contains(searchText) ||
+                    (s.Address ?? "").ToLower().Contains(searchText)
+                ).ToList();
+
+                dataGridViewSuppliers.DataSource = filtered;
+            }
+
+            UpdateStatus($"Displaying {dataGridViewSuppliers.Rows.Count} suppliers");
+        }
+
+        private void UpdateStatus(string message)
+        {
+            // Update status label if you added one
+            // For now, we can set the form text or just ignore
+            this.Text = $"Supplier Management - {message}";
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }

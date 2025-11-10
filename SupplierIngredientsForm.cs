@@ -1,18 +1,20 @@
 using System;
-using System.Windows.Forms;
 using System.Collections.Generic;
-using System.Linq;
-using System.IO;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace CostChef
 {
     public partial class SupplierIngredientsForm : Form
     {
-        private DataGridView dataGridViewIngredients;
-        private Button btnClose;
-        private Button btnExportToCsv;
+        private int? _selectedSupplierId;
         private ComboBox cmbSuppliers;
-        private Label lblSupplier;
+        private DataGridView dataGridView1;
+        private Label lblTitle;
+        private Button btnClose;
+        private Button btnRemoveAssignment;
+        private Label lblStatus;
+        private System.ComponentModel.IContainer components = null;
 
         public SupplierIngredientsForm()
         {
@@ -20,78 +22,138 @@ namespace CostChef
             LoadSuppliers();
         }
 
-        // ENHANCED CONSTRUCTOR: Now properly auto-loads the supplier's ingredients
-        public SupplierIngredientsForm(Supplier supplier)
+        public SupplierIngredientsForm(int supplierId) : this()
         {
-            InitializeComponent();
-            LoadSuppliers();
-            
-            // Auto-select and auto-load the provided supplier
-            if (supplier != null)
-            {
-                // Find and select the supplier in the combobox
-                foreach (Supplier item in cmbSuppliers.Items)
-                {
-                    if (item.Id == supplier.Id)
-                    {
-                        cmbSuppliers.SelectedItem = item;
-                        break;
-                    }
-                }
-                
-                // NEW: Immediately load the supplier's ingredients
-                LoadSupplierIngredients();
-            }
+            _selectedSupplierId = supplierId;
+            AutoSelectSupplier(supplierId);
         }
 
         private void InitializeComponent()
         {
-            this.dataGridViewIngredients = new DataGridView();
-            this.btnClose = new Button();
-            this.btnExportToCsv = new Button();
-            this.cmbSuppliers = new ComboBox();
-            this.lblSupplier = new Label();
-
-            this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(700, 500);
+            this.components = new System.ComponentModel.Container();
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(800, 600);
             this.Text = "Supplier Ingredients";
             this.StartPosition = FormStartPosition.CenterParent;
 
-            // Supplier Selection
-            this.lblSupplier.Location = new System.Drawing.Point(12, 15);
-            this.lblSupplier.Size = new System.Drawing.Size(100, 20);
-            this.lblSupplier.Text = "Select Supplier:";
-            this.lblSupplier.AutoSize = true;
+            // Main layout panel
+            var mainPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
+            this.Controls.Add(mainPanel);
 
-            this.cmbSuppliers.Location = new System.Drawing.Point(120, 12);
-            this.cmbSuppliers.Size = new System.Drawing.Size(200, 20);
-            this.cmbSuppliers.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cmbSuppliers.SelectedIndexChanged += (s, e) => LoadSupplierIngredients();
+            // Title label
+            lblTitle = new Label 
+            { 
+                Text = "Supplier Ingredients",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(10, 10)
+            };
+            mainPanel.Controls.Add(lblTitle);
 
-            // DataGrid
-            this.dataGridViewIngredients.Location = new System.Drawing.Point(12, 45);
-            this.dataGridViewIngredients.Size = new System.Drawing.Size(676, 350);
-            this.dataGridViewIngredients.ReadOnly = true;
-            this.dataGridViewIngredients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            // Supplier selection
+            var lblSupplier = new Label 
+            { 
+                Text = "Select Supplier:",
+                Location = new Point(10, 50),
+                AutoSize = true
+            };
+            mainPanel.Controls.Add(lblSupplier);
 
-            // Export Button
-            this.btnExportToCsv.Location = new System.Drawing.Point(12, 410);
-            this.btnExportToCsv.Size = new System.Drawing.Size(120, 30);
-            this.btnExportToCsv.Text = "Export to CSV";
-            this.btnExportToCsv.Click += (s, e) => ExportSupplierIngredientsToCsv();
+            cmbSuppliers = new ComboBox
+            {
+                Location = new Point(120, 47),
+                Size = new Size(300, 25),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            mainPanel.Controls.Add(cmbSuppliers);
 
-            // Close Button
-            this.btnClose.Location = new System.Drawing.Point(588, 410);
-            this.btnClose.Size = new System.Drawing.Size(100, 30);
-            this.btnClose.Text = "Close";
-            this.btnClose.Click += (s, e) => this.Close();
+            // DataGridView for ingredients
+            dataGridView1 = new DataGridView
+            {
+                Location = new Point(10, 90),
+                Size = new Size(760, 350),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+                ReadOnly = true,
+                AutoGenerateColumns = false,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = true  // Allow multiple selection
+            };
 
-            this.Controls.AddRange(new Control[] {
-                lblSupplier, cmbSuppliers, dataGridViewIngredients, btnExportToCsv, btnClose
+            // Configure columns
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colName", 
+                HeaderText = "Ingredient Name", 
+                DataPropertyName = "Name",
+                Width = 200 
+            });
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colUnit", 
+                HeaderText = "Unit", 
+                DataPropertyName = "Unit",
+                Width = 80 
+            });
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colPrice", 
+                HeaderText = "Unit Price", 
+                DataPropertyName = "UnitPrice",
+                Width = 100 
+            });
+            dataGridView1.Columns.Add(new DataGridViewTextBoxColumn 
+            { 
+                Name = "colCategory", 
+                HeaderText = "Category", 
+                DataPropertyName = "Category",
+                Width = 150 
             });
 
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            mainPanel.Controls.Add(dataGridView1);
+
+            // Status label
+            lblStatus = new Label
+            {
+                Location = new Point(10, 450),
+                Size = new Size(400, 20),
+                Text = "Select ingredients to remove supplier assignment"
+            };
+            mainPanel.Controls.Add(lblStatus);
+
+            // Button panel
+            var buttonPanel = new Panel
+            {
+                Location = new Point(10, 480),
+                Size = new Size(760, 40)
+            };
+            mainPanel.Controls.Add(buttonPanel);
+
+            // Remove Assignment button
+            btnRemoveAssignment = new Button
+            {
+                Text = "Remove Supplier Assignment",
+                Location = new Point(0, 5),
+                Size = new Size(180, 30),
+                Enabled = false  // Disabled until selection
+            };
+            btnRemoveAssignment.Click += BtnRemoveAssignment_Click;
+            buttonPanel.Controls.Add(btnRemoveAssignment);
+
+            // Close button
+            btnClose = new Button
+            {
+                Text = "Close",
+                Location = new Point(670, 5),
+                Size = new Size(90, 30)
+            };
+            btnClose.Click += BtnClose_Click;
+            buttonPanel.Controls.Add(btnClose);
+
+            // Wire up events
+            cmbSuppliers.SelectedIndexChanged += CmbSuppliers_SelectedIndexChanged;
+            dataGridView1.SelectionChanged += DataGridView1_SelectionChanged;
         }
 
         private void LoadSuppliers()
@@ -106,85 +168,139 @@ namespace CostChef
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void LoadSupplierIngredients()
+        private void AutoSelectSupplier(int supplierId)
+        {
+            foreach (Supplier supplier in cmbSuppliers.Items)
+            {
+                if (supplier.Id == supplierId)
+                {
+                    cmbSuppliers.SelectedItem = supplier;
+                    break;
+                }
+            }
+        }
+
+        private void LoadSupplierIngredients(int supplierId)
         {
             try
             {
+                var ingredients = DatabaseContext.GetIngredientsBySupplier(supplierId);
+                dataGridView1.DataSource = ingredients;
+
+                // Update title to show supplier name
                 if (cmbSuppliers.SelectedItem is Supplier selectedSupplier)
                 {
-                    var ingredients = DatabaseContext.GetIngredientsBySupplier(selectedSupplier.Id);
-                    dataGridViewIngredients.DataSource = ingredients;
-                    
-                    if (dataGridViewIngredients.Columns.Count > 0)
-                    {
-                        dataGridViewIngredients.Columns["UnitPrice"].DefaultCellStyle.Format = $"{AppSettings.CurrencySymbol}0.0000";
-                    }
-                    
-                    // Update window title to show supplier name and ingredient count
-                    this.Text = $"Supplier Ingredients - {selectedSupplier.Name} ({ingredients.Count} items)";
+                    lblTitle.Text = $"Ingredients from {selectedSupplier.Name}";
+                    this.Text = $"Supplier Ingredients - {selectedSupplier.Name}";
                 }
+
+                UpdateStatusLabel(ingredients.Count);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading supplier ingredients: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ExportSupplierIngredientsToCsv()
+        private void UpdateStatusLabel(int ingredientCount)
         {
-            try
+            lblStatus.Text = $"{ingredientCount} ingredients found. Select items to remove supplier assignment.";
+        }
+
+        private void CmbSuppliers_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbSuppliers.SelectedValue != null && cmbSuppliers.SelectedValue is int supplierId)
             {
-                if (cmbSuppliers.SelectedItem is not Supplier selectedSupplier)
-                {
-                    MessageBox.Show("Please select a supplier first.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+                LoadSupplierIngredients(supplierId);
+                btnRemoveAssignment.Enabled = false; // Reset on supplier change
+            }
+        }
 
-                var ingredients = DatabaseContext.GetIngredientsBySupplier(selectedSupplier.Id);
-                if (ingredients == null || ingredients.Count == 0)
-                {
-                    MessageBox.Show("No ingredients found for this supplier.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+        private void DataGridView1_SelectionChanged(object sender, EventArgs e)
+        {
+            // Enable remove button only when ingredients are selected
+            btnRemoveAssignment.Enabled = dataGridView1.SelectedRows.Count > 0;
+        }
 
-                using (var saveDialog = new SaveFileDialog())
+        private void BtnRemoveAssignment_Click(object sender, EventArgs e)
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Please select ingredients to remove supplier assignment.", 
+                              "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (cmbSuppliers.SelectedItem is not Supplier currentSupplier)
+            {
+                MessageBox.Show("No supplier selected.", "Error", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var selectedIngredients = new List<Ingredient>();
+            foreach (DataGridViewRow row in dataGridView1.SelectedRows)
+            {
+                if (row.DataBoundItem is Ingredient ingredient)
                 {
-                    saveDialog.Title = $"Export {selectedSupplier.Name} Ingredients to CSV";
-                    saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-                    saveDialog.FileName = $"{selectedSupplier.Name}_ingredients_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-                    saveDialog.InitialDirectory = AppSettings.ExportLocation;
-                    saveDialog.OverwritePrompt = true;
-                    
-                    if (saveDialog.ShowDialog() == DialogResult.OK)
+                    selectedIngredients.Add(ingredient);
+                }
+            }
+
+            if (selectedIngredients.Count == 0) return;
+
+            // Confirmation dialog
+            var result = MessageBox.Show(
+                $"Remove supplier assignment from {selectedIngredients.Count} ingredient(s)?\n\n" +
+                "This will unlink these ingredients from {currentSupplier.Name} but keep the ingredients in your inventory.",
+                "Confirm Remove Supplier Assignment",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    int successCount = 0;
+                    foreach (var ingredient in selectedIngredients)
                     {
-                        var lines = new List<string>();
-                        // Header
-                        lines.Add("Name,Unit,UnitPrice,Category,SupplierName");
-                        
-                        foreach (var ingredient in ingredients)
-                        {
-                            lines.Add($"\"{ingredient.Name}\",\"{ingredient.Unit}\",{ingredient.UnitPrice:F4},\"{ingredient.Category}\",\"{ingredient.SupplierName}\"");
-                        }
-                        
-                        File.WriteAllLines(saveDialog.FileName, lines);
-                        
-                        MessageBox.Show($"Successfully exported {ingredients.Count} ingredients to CSV.", 
-                            "Export Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        // Update ingredient to remove supplier assignment
+                        ingredient.SupplierId = null;
+                        DatabaseContext.UpdateIngredient(ingredient);
+                        successCount++;
                     }
+
+                    // Refresh the list
+                    LoadSupplierIngredients(currentSupplier.Id);
+                    
+                    MessageBox.Show($"Successfully removed supplier assignment from {successCount} ingredient(s).",
+                                  "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error removing supplier assignments: {ex.Message}", 
+                                  "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
-            catch (Exception ex)
+        }
+
+        private void BtnClose_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
             {
-                MessageBox.Show($"Error exporting supplier ingredients: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                components.Dispose();
             }
+            base.Dispose(disposing);
         }
     }
 }

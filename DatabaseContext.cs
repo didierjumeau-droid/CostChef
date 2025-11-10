@@ -59,7 +59,26 @@ namespace CostChef
                             target_food_cost_percentage REAL DEFAULT 30.0
                         )";
 
-                    // Create recipe_ingredients table
+// First, let's add the database schema changes to DatabaseContext.cs
+// Add this to the InitializeDatabase() method:
+
+string createRecipeVersionsTable = @"
+    CREATE TABLE IF NOT EXISTS recipe_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id INTEGER NOT NULL,
+        version_number INTEGER NOT NULL,
+        version_name TEXT,
+        version_notes TEXT,
+        created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT DEFAULT 'System',
+        is_current BOOLEAN DEFAULT 0,
+        recipe_data TEXT NOT NULL, -- JSON serialized recipe and ingredients
+        FOREIGN KEY (recipe_id) REFERENCES recipes (id)
+    )";
+
+command.CommandText = createRecipeVersionsTable;
+command.ExecuteNonQuery();                    
+// Create recipe_ingredients table
                     string createRecipeIngredientsTable = @"
                         CREATE TABLE IF NOT EXISTS recipe_ingredients (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -826,6 +845,13 @@ namespace CostChef
                 }
             }
         }
+
+// In DatabaseContext.cs - Add this method:
+
+public static SQLiteConnection GetConnection()
+{
+    return new SQLiteConnection(_connectionString);
+}
 
         // ========== SAFE DATA READER METHODS ==========
 

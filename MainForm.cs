@@ -14,6 +14,7 @@ namespace CostChef
         private Button btnSupplierReports;
         private Label lblTitle;
         private Label lblSubtitle;
+        private Button btnPriceHistory;
 
         public MainForm()
         {
@@ -34,11 +35,12 @@ namespace CostChef
             this.btnSupplierReports = new Button();
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
+            this.btnPriceHistory = new Button();
             
             // Main Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(400, 450);
-            this.Text = "CostChef v1.1 - Simple Menu Costing";
+            this.ClientSize = new System.Drawing.Size(400, 500);
+            this.Text = "CostChef v2.0 - Simple Menu Costing";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -48,7 +50,7 @@ namespace CostChef
             this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 18F, System.Drawing.FontStyle.Bold);
             this.lblTitle.Location = new System.Drawing.Point(120, 40);
             this.lblTitle.Size = new System.Drawing.Size(160, 29);
-            this.lblTitle.Text = "CostChef v1.1";
+            this.lblTitle.Text = "CostChef v2.0";
             this.lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             
             // lblSubtitle
@@ -88,9 +90,15 @@ namespace CostChef
             this.btnSupplierReports.Size = new System.Drawing.Size(240, 40);
             this.btnSupplierReports.Text = "📊 Supplier Reports";
             this.btnSupplierReports.Click += new EventHandler(this.btnSupplierReports_Click);
+
+            // btnPriceHistory - Properly aligned
+            this.btnPriceHistory.Location = new System.Drawing.Point(80, 370);
+            this.btnPriceHistory.Size = new System.Drawing.Size(240, 40);
+            this.btnPriceHistory.Text = "📈 Price History";
+            this.btnPriceHistory.Click += new EventHandler(this.btnPriceHistory_Click);
             
             // btnExit
-            this.btnExit.Location = new System.Drawing.Point(80, 370);
+            this.btnExit.Location = new System.Drawing.Point(80, 420);
             this.btnExit.Size = new System.Drawing.Size(240, 40);
             this.btnExit.Text = "Exit";
             this.btnExit.Click += new EventHandler(this.btnExit_Click);
@@ -105,7 +113,7 @@ namespace CostChef
                 var settingsForm = new SettingsForm();
                 settingsForm.ShowDialog();
             };
-            
+
             // Add controls to form
             this.Controls.Add(this.lblTitle);
             this.Controls.Add(this.lblSubtitle);
@@ -114,6 +122,7 @@ namespace CostChef
             this.Controls.Add(this.btnSupplierManagement);
             this.Controls.Add(this.btnImportExport);
             this.Controls.Add(this.btnSupplierReports);
+            this.Controls.Add(this.btnPriceHistory);
             this.Controls.Add(this.btnExit);
             this.Controls.Add(this.btnSettings);
             
@@ -149,6 +158,12 @@ namespace CostChef
         {
             var supplierReportsForm = new SupplierReportsForm();
             supplierReportsForm.ShowDialog();
+        }
+
+        private void btnPriceHistory_Click(object sender, EventArgs e)
+        {
+            var priceHistoryForm = new PriceHistoryForm();
+            priceHistoryForm.ShowDialog();
         }
 
         private void btnExit_Click(object sender, EventArgs e)

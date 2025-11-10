@@ -39,6 +39,9 @@ namespace CostChef
         private TextBox txtTags;
         private Button btnManageCategories;
 
+        // NEW: Version History button
+        private Button btnVersionHistory;
+
         private Recipe currentRecipe = new Recipe();
         private List<RecipeIngredient> currentIngredients = new List<RecipeIngredient>();
         private List<Recipe> allRecipes = new List<Recipe>();
@@ -92,6 +95,9 @@ namespace CostChef
             this.txtTags = new TextBox();
             this.btnManageCategories = new Button();
 
+            // NEW: Version History button
+            this.btnVersionHistory = new Button();
+
             // Form
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(800, 600);
@@ -112,6 +118,12 @@ namespace CostChef
             this.btnLoadRecipe.Size = new System.Drawing.Size(80, 25);
             this.btnLoadRecipe.Text = "Load";
             this.btnLoadRecipe.Click += (s, e) => LoadSelectedRecipe();
+
+            // NEW: Version History button - positioned next to Load button
+            this.btnVersionHistory.Location = new System.Drawing.Point(680, 70);
+            this.btnVersionHistory.Size = new System.Drawing.Size(80, 25);
+            this.btnVersionHistory.Text = "📋 Versions";
+            this.btnVersionHistory.Click += (s, e) => ShowVersionHistory();
 
             // Refresh Recipes Button
             this.btnRefreshRecipes.Location = new System.Drawing.Point(620, 10);
@@ -247,7 +259,7 @@ namespace CostChef
             this.txtTags.PlaceholderText = "comma, separated, tags";
             this.txtTags.TextChanged += (s, e) => UpdateRecipeTags();
 
-            // Cost Summary - Adjusted position to make room for new controls
+            // Cost Summary
             this.lblCostSummary.Location = new System.Drawing.Point(12, 380);
             this.lblCostSummary.Size = new System.Drawing.Size(776, 80);
             this.lblCostSummary.Text = "Add ingredients to calculate cost...";
@@ -255,25 +267,25 @@ namespace CostChef
             this.lblCostSummary.BorderStyle = BorderStyle.FixedSingle;
             this.lblCostSummary.Font = new System.Drawing.Font("Consolas", 9);
 
-            // Calculate Button - Adjusted position
+            // Calculate Button
             this.btnCalculate.Location = new System.Drawing.Point(12, 470);
             this.btnCalculate.Size = new System.Drawing.Size(100, 30);
             this.btnCalculate.Text = "Calculate";
             this.btnCalculate.Click += (s, e) => CalculateCost();
 
-            // Save Recipe Button - Adjusted position
+            // Save Recipe Button
             this.btnSaveRecipe.Location = new System.Drawing.Point(122, 470);
             this.btnSaveRecipe.Size = new System.Drawing.Size(100, 30);
             this.btnSaveRecipe.Text = "Save Recipe";
             this.btnSaveRecipe.Click += (s, e) => SaveRecipe();
 
-            // Delete Recipe Button - Adjusted position
+            // Delete Recipe Button
             this.btnDeleteRecipe.Location = new System.Drawing.Point(232, 470);
             this.btnDeleteRecipe.Size = new System.Drawing.Size(100, 30);
             this.btnDeleteRecipe.Text = "Delete Recipe";
             this.btnDeleteRecipe.Click += (s, e) => DeleteRecipe();
 
-            // Close Button - Adjusted position
+            // Close Button
             this.btnClose.Location = new System.Drawing.Point(688, 470);
             this.btnClose.Size = new System.Drawing.Size(100, 30);
             this.btnClose.Text = "Close";
@@ -283,7 +295,7 @@ namespace CostChef
             this.Controls.AddRange(new Control[] {
                 lblRecipeName, txtRecipeName, lblBatchYield, txtBatchYield,
                 lblFoodCost, cmbFoodCost, lblExistingRecipes, cmbExistingRecipes,
-                btnLoadRecipe, btnRefreshRecipes, txtSearchRecipes, btnSearchRecipes, btnClearSearch,
+                btnLoadRecipe, btnVersionHistory, btnRefreshRecipes, txtSearchRecipes, btnSearchRecipes, btnClearSearch,
                 cmbIngredients, txtQuantity, btnAddIngredient, 
                 btnRemoveIngredient, dataGridViewIngredients, 
                 lblCategory, cmbCategory, txtNewCategory, lblTags, txtTags, btnManageCategories,
@@ -835,7 +847,24 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
             lblCostSummary.Text = summary;
         }
 
-        // ENHANCED SAVE RECIPE METHOD WITH OVERWRITE/NEW/CANCEL OPTIONS
+        // NEW: Version History method
+        private void ShowVersionHistory()
+        {
+            if (currentRecipe == null || currentRecipe.Id == 0)
+            {
+                MessageBox.Show("Please save the recipe first to view version history.", 
+                    "Recipe Not Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var versionForm = new RecipeVersionHistoryForm(currentRecipe.Id, currentRecipe.Name);
+            if (versionForm.ShowDialog() == DialogResult.OK)
+            {
+                // Refresh the recipe if a version was restored
+                LoadSelectedRecipe();
+            }
+        }
+
         private void SaveRecipe()
         {
             if (string.IsNullOrWhiteSpace(currentRecipe.Name))
@@ -861,13 +890,20 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
                         "Save Recipe Options",
                         MessageBoxButtons.YesNoCancel,
                         MessageBoxIcon.Question,
-                        MessageBoxDefaultButton.Button3); // Default to Cancel for safety
+                        MessageBoxDefaultButton.Button3);
 
                     switch (result)
                     {
                         case DialogResult.Yes:
-                            // Overwrite existing recipe
+                            // Overwrite existing recipe and create version
                             DatabaseContext.UpdateRecipe(currentRecipe);
+                            
+                            // Create version history
+                            RecipeVersioningService.CreateVersion(currentRecipe.Id, 
+                                $"Auto-save {DateTime.Now:yyyy-MM-dd HH:mm}",
+                                "Automatic version created on save",
+                                "System");
+                            
                             MessageBox.Show($"Recipe '{currentRecipe.Name}' updated successfully!", "Success", 
                                 MessageBoxButtons.OK, MessageBoxIcon.Information);
                             break;
@@ -924,7 +960,7 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
                                         
                                         // Update the current recipe to the new one
                                         currentRecipe = newRecipe;
-                                        currentRecipe.Id = newRecipe.Id; // Update the ID
+                                        currentRecipe.Id = newRecipe.Id;
                                         
                                         MessageBox.Show($"Recipe '{newRecipe.Name}' saved successfully as a new recipe!", "Success", 
                                             MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -938,13 +974,13 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
                                 }
                                 else
                                 {
-                                    return; // User cancelled the name dialog
+                                    return;
                                 }
                             }
                             break;
                             
                         case DialogResult.Cancel:
-                            return; // User cancelled the operation
+                            return;
                     }
                 }
                 else
@@ -975,50 +1011,50 @@ Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{tar
             }
         }
 
-   private void DeleteRecipe()
-{
-    if (currentRecipe == null || currentRecipe.Id == 0)
-    {
-        MessageBox.Show("No recipe loaded to delete.\n\nPlease load an existing recipe first, or save the current recipe before deleting.", 
-            "No Recipe Loaded", 
-            MessageBoxButtons.OK, 
-            MessageBoxIcon.Information);
-        return;
-    }
-
-    var result = MessageBox.Show(
-        $"Are you sure you want to delete '{currentRecipe.Name}'?\n\nThis action cannot be undone!", 
-        "Confirm Delete", 
-        MessageBoxButtons.YesNo, 
-        MessageBoxIcon.Warning, 
-        MessageBoxDefaultButton.Button2); // Default to "No" for safety
-
-    if (result == DialogResult.Yes)
-    {
-        try
+        private void DeleteRecipe()
         {
-            DatabaseContext.DeleteRecipe(currentRecipe.Id);
-            MessageBox.Show($"Recipe '{currentRecipe.Name}' deleted successfully!", 
-                "Success", 
-                MessageBoxButtons.OK, 
-                MessageBoxIcon.Information);
-            
-            // Reset to new recipe after deletion
-            InitializeNewRecipe();
-            LoadExistingRecipes();
-            
-            UpdateRecipeCountDisplay();
-            RecipesUpdated?.Invoke();
-            
+            if (currentRecipe == null || currentRecipe.Id == 0)
+            {
+                MessageBox.Show("No recipe loaded to delete.\n\nPlease load an existing recipe first, or save the current recipe before deleting.", 
+                    "No Recipe Loaded", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"Are you sure you want to delete '{currentRecipe.Name}'?\n\nThis action cannot be undone!", 
+                "Confirm Delete", 
+                MessageBoxButtons.YesNo, 
+                MessageBoxIcon.Warning, 
+                MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
+                    MessageBox.Show($"Recipe '{currentRecipe.Name}' deleted successfully!", 
+                        "Success", 
+                        MessageBoxButtons.OK, 
+                        MessageBoxIcon.Information);
+                    
+                    // Reset to new recipe after deletion
+                    InitializeNewRecipe();
+                    LoadExistingRecipes();
+                    
+                    UpdateRecipeCountDisplay();
+                    RecipesUpdated?.Invoke();
+                    
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting recipe: {ex.Message}", 
+                        "Error", 
+                        MessageBoxButtons.OK, 
+                        MessageBoxIcon.Error);
+                }
+            }
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error deleting recipe: {ex.Message}", 
-                "Error", 
-                MessageBoxButtons.OK, 
-                MessageBoxIcon.Error);
-        }
-    }
-}
     }
 }

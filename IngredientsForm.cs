@@ -44,6 +44,35 @@ namespace CostChef
             this.txtSearch.Location = new System.Drawing.Point(60, 12);
             this.txtSearch.Size = new System.Drawing.Size(150, 20);
             this.txtSearch.TextChanged += (s, e) => LoadIngredients();
+// In IngredientsForm, add to the button panel or as a context menu
+// In IngredientsForm, replace the btnViewPriceHistory code with:
+
+// In IngredientsForm, add this button to the button panel:
+var btnViewPriceHistory = new Button
+{
+    Text = "View Price History",
+    Location = new Point(342, 410), // Adjust position as needed
+    Size = new Size(120, 30)
+};
+btnViewPriceHistory.Click += (s, e) => 
+{
+    if (dataGridViewIngredients.SelectedRows.Count > 0)
+    {
+        var ingredient = dataGridViewIngredients.SelectedRows[0].DataBoundItem as Ingredient;
+        if (ingredient != null)
+        {
+            // FIXED: Pass the ingredient to the price history form
+            var priceHistoryForm = new PriceHistoryForm(ingredient);
+            priceHistoryForm.ShowDialog();
+        }
+    }
+    else
+    {
+        MessageBox.Show("Please select an ingredient to view price history.", 
+            "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+};
+this.Controls.Add(btnViewPriceHistory);
 
             // Category Filter
             var lblCategory = new Label { Text = "Category:", Location = new System.Drawing.Point(220, 15), AutoSize = true };
