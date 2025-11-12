@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 
 namespace CostChef
 {
@@ -154,6 +155,35 @@ namespace CostChef
             }
         }
 
+        public static List<string> GetIngredientUnits()
+        {
+            var units = new List<string>();
+
+            try
+            {
+                using (var connection = new SQLiteConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT DISTINCT unit FROM ingredients WHERE unit IS NOT NULL AND unit != '' ORDER BY unit";
+
+                    using (var command = new SQLiteCommand(query, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            units.Add(SafeGetString(reader, "unit"));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading ingredient units: {ex.Message}");
+            }
+
+            return units ?? new List<string>();
+        }
+
         public static List<PriceHistory> GetPriceHistory(int ingredientId)
         {
             var priceHistory = new List<PriceHistory>();
@@ -284,8 +314,7 @@ namespace CostChef
                 {
                     connection.Open();
                     
-                    string query = @"SELECT id, name, contact_person, phone, email, address, 
-                                   COALESCE(created_at, datetime('now')) as created_at 
+                    string query = @"SELECT id, name, contact_person, phone, email, address 
                                    FROM suppliers ORDER BY name";
 
                     using (var command = new SQLiteCommand(query, connection))
@@ -300,8 +329,7 @@ namespace CostChef
                                 ContactPerson = SafeGetString(reader, "contact_person"),
                                 Phone = SafeGetString(reader, "phone"),
                                 Email = SafeGetString(reader, "email"),
-                                Address = SafeGetString(reader, "address"),
-                                CreatedAt = SafeGetString(reader, "created_at")
+                                Address = SafeGetString(reader, "address")
                             };
                             
                             suppliers.Add(supplier);
@@ -311,7 +339,8 @@ namespace CostChef
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading suppliers: {ex.Message}");
+                MessageBox.Show($"Error loading suppliers: {ex.Message}", "Error", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return new List<Supplier>();
             }
 
@@ -404,8 +433,7 @@ namespace CostChef
                                 ContactPerson = SafeGetString(reader, "contact_person"),
                                 Phone = SafeGetString(reader, "phone"),
                                 Email = SafeGetString(reader, "email"),
-                                Address = SafeGetString(reader, "address"),
-                                CreatedAt = SafeGetString(reader, "created_at")
+                                Address = SafeGetString(reader, "address")
                             };
                         }
                     }
@@ -486,7 +514,7 @@ namespace CostChef
                     {
                         while (reader.Read())
                         {
-                            ingredients.Add(new Ingredient
+                            var ingredient = new Ingredient
                             {
                                 Id = SafeGetInt(reader, "id"),
                                 Name = SafeGetString(reader, "name"),
@@ -495,7 +523,19 @@ namespace CostChef
                                 Category = SafeGetString(reader, "category"),
                                 SupplierId = SafeGetNullableInt(reader, "supplier_id"),
                                 SupplierName = SafeGetString(reader, "supplier_name")
-                            });
+                            };
+                            
+                            // TEMPORARY DEBUG - Check what supplier names are actually coming from database
+                            if (!string.IsNullOrEmpty(ingredient.SupplierName))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"DB DEBUG: {ingredient.Name} -> Supplier: '{ingredient.SupplierName}' (ID: {ingredient.SupplierId})");
+                            }
+                            else if (ingredient.SupplierId.HasValue)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"DB DEBUG: {ingredient.Name} -> SupplierID: {ingredient.SupplierId} but NO SUPPLIER NAME FOUND!");
+                            }
+                            
+                            ingredients.Add(ingredient);
                         }
                     }
                 }
@@ -566,6 +606,7 @@ namespace CostChef
                             ? (object)ingredient.SupplierId.Value 
                             : DBNull.Value);
                     command.Parameters.AddWithValue("@id", ingredient.Id);
+                    
                     command.ExecuteNonQuery();
                 }
 
@@ -574,6 +615,33 @@ namespace CostChef
                 {
                     RecordPriceChange(ingredient.Id, oldPrice, ingredient.UnitPrice, "User", "Price update");
                 }
+            }
+        }
+
+        public static void CleanupOrphanedSupplierRelationships()
+        {
+            try
+            {
+                using (var connection = new SQLiteConnection(_connectionString))
+                {
+                    connection.Open();
+                    
+                    // Find and fix ingredients with supplier_id that don't exist in suppliers table
+                    string cleanupQuery = @"
+                        UPDATE ingredients 
+                        SET supplier_id = NULL 
+                        WHERE supplier_id IS NOT NULL 
+                        AND supplier_id NOT IN (SELECT id FROM suppliers)";
+                    
+                    using (var command = new SQLiteCommand(cleanupQuery, connection))
+                    {
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error cleaning up supplier relationships: {ex.Message}");
             }
         }
 
@@ -628,35 +696,6 @@ namespace CostChef
             }
 
             return categories ?? new List<string>();
-        }
-
-        public static List<string> GetIngredientUnits()
-        {
-            var units = new List<string>();
-
-            try
-            {
-                using (var connection = new SQLiteConnection(_connectionString))
-                {
-                    connection.Open();
-                    string query = "SELECT DISTINCT unit FROM ingredients WHERE unit IS NOT NULL AND unit != '' ORDER BY unit";
-
-                    using (var command = new SQLiteCommand(query, connection))
-                    using (var reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            units.Add(SafeGetString(reader, "unit"));
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error loading ingredient units: {ex.Message}");
-            }
-
-            return units ?? new List<string>();
         }
 
         // ========== RECIPE METHODS ==========
@@ -814,31 +853,31 @@ namespace CostChef
                     WHERE ri.recipe_id = @recipeId";
 
                     using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@recipeId", recipeId);
+                    using (var reader = command.ExecuteReader())
                     {
-                        command.Parameters.AddWithValue("@recipeId", recipeId);
-                        using (var reader = command.ExecuteReader())
+                        while (reader.Read())
                         {
-                            while (reader.Read())
+                            var unitPrice = SafeGetDecimal(reader, "unit_price");
+                            var quantity = SafeGetDecimal(reader, "quantity");
+                            
+                            recipeIngredients.Add(new RecipeIngredient
                             {
-                                var unitPrice = SafeGetDecimal(reader, "unit_price");
-                                var quantity = SafeGetDecimal(reader, "quantity");
-                                
-                                recipeIngredients.Add(new RecipeIngredient
-                                {
-                                    Id = SafeGetInt(reader, "id"),
-                                    RecipeId = SafeGetInt(reader, "recipe_id"),
-                                    IngredientId = SafeGetInt(reader, "ingredient_id"),
-                                    Quantity = quantity,
-                                    IngredientName = SafeGetString(reader, "ingredient_name"),
-                                    Unit = SafeGetString(reader, "unit"),
-                                    UnitPrice = unitPrice,
-                                    Supplier = SafeGetString(reader, "supplier_name")
-                                });
-                            }
+                                Id = SafeGetInt(reader, "id"),
+                                RecipeId = SafeGetInt(reader, "recipe_id"),
+                                IngredientId = SafeGetInt(reader, "ingredient_id"),
+                                Quantity = quantity,
+                                IngredientName = SafeGetString(reader, "ingredient_name"),
+                                Unit = SafeGetString(reader, "unit"),
+                                UnitPrice = unitPrice,
+                                Supplier = SafeGetString(reader, "supplier_name")
+                            });
                         }
                     }
                 }
             }
+      }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error loading recipe ingredients: {ex.Message}");
@@ -891,6 +930,24 @@ namespace CostChef
                 {
                     command.Parameters.AddWithValue("@id", recipeIngredientId);
                     command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        // ========== RECIPE VERSIONING METHODS ==========
+
+        public static int GetRecipeVersionCount(int recipeId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                string query = "SELECT COUNT(*) FROM recipe_versions WHERE recipe_id = @recipeId";
+                
+                using (var command = new SQLiteCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@recipeId", recipeId);
+                    var result = command.ExecuteScalar();
+                    return Convert.ToInt32(result);
                 }
             }
         }

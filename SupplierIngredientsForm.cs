@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Linq;
 
 namespace CostChef
 {
@@ -16,21 +17,16 @@ namespace CostChef
         private Label lblStatus;
         private System.ComponentModel.IContainer components = null;
 
+        // Default constructor
         public SupplierIngredientsForm()
         {
             InitializeComponent();
-            LoadSuppliers();
         }
 
+        // Constructor with supplier ID
         public SupplierIngredientsForm(int supplierId) : this()
         {
             _selectedSupplierId = supplierId;
-            AutoSelectSupplier(supplierId);
-            // Load ingredients immediately after auto-selecting
-            if (cmbSuppliers.SelectedItem != null)
-            {
-                LoadSupplierIngredients(supplierId);
-            }
         }
 
         private void InitializeComponent()
@@ -83,7 +79,7 @@ namespace CostChef
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                MultiSelect = true  // Allow multiple selection
+                MultiSelect = true
             };
 
             // Configure columns
@@ -106,7 +102,8 @@ namespace CostChef
                 Name = "colPrice", 
                 HeaderText = "Unit Price", 
                 DataPropertyName = "UnitPrice",
-                Width = 100 
+                Width = 100,
+                DefaultCellStyle = new DataGridViewCellStyle { Format = "F4" }
             });
             dataGridView1.Columns.Add(new DataGridViewTextBoxColumn 
             { 
@@ -141,7 +138,7 @@ namespace CostChef
                 Text = "Remove Supplier Assignment",
                 Location = new Point(0, 5),
                 Size = new Size(180, 30),
-                Enabled = false  // Disabled until selection
+                Enabled = false
             };
             btnRemoveAssignment.Click += BtnRemoveAssignment_Click;
             buttonPanel.Controls.Add(btnRemoveAssignment);
@@ -159,6 +156,14 @@ namespace CostChef
             // Wire up events
             cmbSuppliers.SelectedIndexChanged += CmbSuppliers_SelectedIndexChanged;
             dataGridView1.SelectionChanged += DataGridView1_SelectionChanged;
+            
+            // Handle form load event
+            this.Load += SupplierIngredientsForm_Load;
+        }
+
+        private void SupplierIngredientsForm_Load(object sender, EventArgs e)
+        {
+            LoadSuppliers();
         }
 
         private void LoadSuppliers()
@@ -169,6 +174,12 @@ namespace CostChef
                 cmbSuppliers.DataSource = suppliers;
                 cmbSuppliers.DisplayMember = "Name";
                 cmbSuppliers.ValueMember = "Id";
+                
+                // Auto-select after ComboBox is populated
+                if (_selectedSupplierId.HasValue)
+                {
+                    AutoSelectSupplier(_selectedSupplierId.Value);
+                }
             }
             catch (Exception ex)
             {
@@ -179,13 +190,29 @@ namespace CostChef
 
         private void AutoSelectSupplier(int supplierId)
         {
-            foreach (Supplier supplier in cmbSuppliers.Items)
+            try
             {
-                if (supplier.Id == supplierId)
+                bool found = false;
+                foreach (Supplier supplier in cmbSuppliers.Items)
                 {
-                    cmbSuppliers.SelectedItem = supplier;
-                    break;
+                    if (supplier.Id == supplierId)
+                    {
+                        cmbSuppliers.SelectedItem = supplier;
+                        found = true;
+                        break;
+                    }
                 }
+                
+                if (!found)
+                {
+                    MessageBox.Show($"Supplier with ID {supplierId} not found.", "Error", 
+                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error auto-selecting supplier: {ex.Message}", "Error", 
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -219,17 +246,15 @@ namespace CostChef
 
         private void CmbSuppliers_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // FIXED: Get supplier ID from SelectedItem, not SelectedValue
             if (cmbSuppliers.SelectedItem is Supplier selectedSupplier)
             {
                 LoadSupplierIngredients(selectedSupplier.Id);
-                btnRemoveAssignment.Enabled = false; // Reset on supplier change
+                btnRemoveAssignment.Enabled = false;
             }
         }
 
         private void DataGridView1_SelectionChanged(object sender, EventArgs e)
         {
-            // Enable remove button only when ingredients are selected
             btnRemoveAssignment.Enabled = dataGridView1.SelectedRows.Count > 0;
         }
 
@@ -260,7 +285,6 @@ namespace CostChef
 
             if (selectedIngredients.Count == 0) return;
 
-            // Confirmation dialog
             var result = MessageBox.Show(
                 $"Remove supplier assignment from {selectedIngredients.Count} ingredient(s)?\n\n" +
                 $"This will unlink these ingredients from {currentSupplier.Name} but keep the ingredients in your inventory.",
@@ -275,13 +299,11 @@ namespace CostChef
                     int successCount = 0;
                     foreach (var ingredient in selectedIngredients)
                     {
-                        // Update ingredient to remove supplier assignment
                         ingredient.SupplierId = null;
                         DatabaseContext.UpdateIngredient(ingredient);
                         successCount++;
                     }
 
-                    // Refresh the list
                     LoadSupplierIngredients(currentSupplier.Id);
                     
                     MessageBox.Show($"Successfully removed supplier assignment from {successCount} ingredient(s).",

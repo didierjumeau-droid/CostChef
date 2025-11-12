@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using System.Linq;
 using System.Collections.Generic;
+using System.Drawing;
 
 namespace CostChef
 {
@@ -39,7 +40,10 @@ namespace CostChef
         private TextBox txtTags;
         private Button btnManageCategories;
 
-        // NEW: Version History button
+        // NEW: Unit display label
+        private Label lblUnitDisplay;
+
+        // Version History button
         private Button btnVersionHistory;
 
         private Recipe currentRecipe = new Recipe();
@@ -59,6 +63,7 @@ namespace CostChef
             LoadExistingRecipes();
             InitializeNewRecipe();
             LoadCategories();
+            ConfigureIngredientsGrid();
         }
 
         private void InitializeComponent()
@@ -95,7 +100,10 @@ namespace CostChef
             this.txtTags = new TextBox();
             this.btnManageCategories = new Button();
 
-            // NEW: Version History button
+            // NEW: Unit display label
+            this.lblUnitDisplay = new Label();
+
+            // Version History button
             this.btnVersionHistory = new Button();
 
             // Form
@@ -118,12 +126,6 @@ namespace CostChef
             this.btnLoadRecipe.Size = new System.Drawing.Size(80, 25);
             this.btnLoadRecipe.Text = "Load";
             this.btnLoadRecipe.Click += (s, e) => LoadSelectedRecipe();
-
-            // NEW: Version History button - positioned next to Load button
-            this.btnVersionHistory.Location = new System.Drawing.Point(680, 70);
-            this.btnVersionHistory.Size = new System.Drawing.Size(80, 25);
-            this.btnVersionHistory.Text = "📋 Versions";
-            this.btnVersionHistory.Click += (s, e) => ShowVersionHistory();
 
             // Refresh Recipes Button
             this.btnRefreshRecipes.Location = new System.Drawing.Point(620, 10);
@@ -159,7 +161,11 @@ namespace CostChef
             this.txtRecipeName.Location = new System.Drawing.Point(120, 12);
             this.txtRecipeName.Size = new System.Drawing.Size(200, 20);
             this.txtRecipeName.Text = "New Recipe";
-            this.txtRecipeName.TextChanged += (s, e) => currentRecipe.Name = txtRecipeName.Text;
+            this.txtRecipeName.TextChanged += (s, e) => 
+            {
+                currentRecipe.Name = txtRecipeName.Text;
+                CheckRecipeNameAvailability();
+            };
 
             // Batch Yield
             this.lblBatchYield.Location = new System.Drawing.Point(12, 45);
@@ -172,7 +178,16 @@ namespace CostChef
             this.txtBatchYield.TextChanged += (s, e) => 
             {
                 if (int.TryParse(txtBatchYield.Text, out int yield))
+                {
+                    var oldYield = currentRecipe.BatchYield;
                     currentRecipe.BatchYield = yield;
+                    
+                    // Create version when batch yield changes significantly
+                    if (currentRecipe.Id > 0 && oldYield != yield)
+                    {
+                        CreateVersionForChange($"Batch yield changed from {oldYield} to {yield}");
+                    }
+                }
             };
 
             // Food Cost Target
@@ -190,29 +205,46 @@ namespace CostChef
                 {
                     var percent = cmbFoodCost.SelectedItem.ToString().Replace("%", "");
                     if (decimal.TryParse(percent, out decimal foodCost))
+                    {
+                        var oldPercentage = currentRecipe.TargetFoodCostPercentage;
                         currentRecipe.TargetFoodCostPercentage = foodCost / 100m;
+                        
+                        // Create version when food cost % changes significantly
+                        if (currentRecipe.Id > 0 && Math.Abs(oldPercentage - currentRecipe.TargetFoodCostPercentage) > 0.01m)
+                        {
+                            CreateVersionForChange($"Food cost target changed from {oldPercentage*100:0}% to {foodCost}%");
+                        }
+                    }
                 }
             };
 
             // Ingredients ComboBox
             this.cmbIngredients.Location = new System.Drawing.Point(12, 75);
-            this.cmbIngredients.Size = new System.Drawing.Size(250, 20);
+            this.cmbIngredients.Size = new System.Drawing.Size(200, 20);
             this.cmbIngredients.DropDownStyle = ComboBoxStyle.DropDownList;
+            this.cmbIngredients.SelectedIndexChanged += (s, e) => UpdateUnitDisplay();
+
+            // Unit Display Label
+            this.lblUnitDisplay.Location = new System.Drawing.Point(220, 75);
+            this.lblUnitDisplay.Size = new System.Drawing.Size(60, 20);
+            this.lblUnitDisplay.Text = "grams";
+            this.lblUnitDisplay.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.lblUnitDisplay.BorderStyle = BorderStyle.FixedSingle;
 
             // Quantity
-            this.txtQuantity.Location = new System.Drawing.Point(270, 75);
+            this.txtQuantity.Location = new System.Drawing.Point(290, 75);
             this.txtQuantity.Size = new System.Drawing.Size(80, 20);
             this.txtQuantity.Text = "100";
             this.txtQuantity.PlaceholderText = "Quantity";
 
             // Add Ingredient Button
-            this.btnAddIngredient.Location = new System.Drawing.Point(360, 73);
+            this.btnAddIngredient.Location = new System.Drawing.Point(380, 73);
             this.btnAddIngredient.Size = new System.Drawing.Size(80, 25);
             this.btnAddIngredient.Text = "Add";
             this.btnAddIngredient.Click += (s, e) => AddIngredientToRecipe();
 
             // Remove Ingredient Button
-            this.btnRemoveIngredient.Location = new System.Drawing.Point(450, 73);
+            this.btnRemoveIngredient.Location = new System.Drawing.Point(470, 73);
             this.btnRemoveIngredient.Size = new System.Drawing.Size(80, 25);
             this.btnRemoveIngredient.Text = "Remove";
             this.btnRemoveIngredient.Click += (s, e) => RemoveIngredient();
@@ -285,6 +317,13 @@ namespace CostChef
             this.btnDeleteRecipe.Text = "Delete Recipe";
             this.btnDeleteRecipe.Click += (s, e) => DeleteRecipe();
 
+            // Version History Button
+            this.btnVersionHistory.Location = new System.Drawing.Point(342, 470);
+            this.btnVersionHistory.Size = new System.Drawing.Size(120, 30);
+            this.btnVersionHistory.Text = "Version History";
+            this.btnVersionHistory.Click += (s, e) => ShowVersionHistory();
+            this.btnVersionHistory.Enabled = false; // Disabled until a recipe is loaded
+
             // Close Button
             this.btnClose.Location = new System.Drawing.Point(688, 470);
             this.btnClose.Size = new System.Drawing.Size(100, 30);
@@ -295,15 +334,409 @@ namespace CostChef
             this.Controls.AddRange(new Control[] {
                 lblRecipeName, txtRecipeName, lblBatchYield, txtBatchYield,
                 lblFoodCost, cmbFoodCost, lblExistingRecipes, cmbExistingRecipes,
-                btnLoadRecipe, btnVersionHistory, btnRefreshRecipes, txtSearchRecipes, btnSearchRecipes, btnClearSearch,
-                cmbIngredients, txtQuantity, btnAddIngredient, 
+                btnLoadRecipe, btnRefreshRecipes, txtSearchRecipes, btnSearchRecipes, btnClearSearch,
+                cmbIngredients, lblUnitDisplay, txtQuantity, btnAddIngredient, 
                 btnRemoveIngredient, dataGridViewIngredients, 
                 lblCategory, cmbCategory, txtNewCategory, lblTags, txtTags, btnManageCategories,
-                lblCostSummary, btnCalculate, btnSaveRecipe, btnDeleteRecipe, btnClose
+                lblCostSummary, btnCalculate, btnSaveRecipe, btnDeleteRecipe, btnVersionHistory, btnClose
             });
 
             this.ResumeLayout(false);
             this.PerformLayout();
+        }
+
+        private void ShowVersionHistory()
+        {
+            if (currentRecipe.Id > 0)
+            {
+                var versionForm = new RecipeVersionHistoryForm(currentRecipe.Id, currentRecipe.Name);
+                versionForm.ShowDialog();
+                
+                // Refresh the recipe after version operations
+                if (versionForm.DialogResult == DialogResult.OK)
+                {
+                    LoadSelectedRecipe(); // Reload the current recipe
+                }
+            }
+            else
+            {
+                MessageBox.Show("Please load or save a recipe first to access version history.", 
+                    "No Recipe Loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        // ========== VERSIONING INTEGRATION METHODS ==========
+        
+        private void CreateVersionForChange(string changeDescription)
+        {
+            if (currentRecipe.Id > 0)
+            {
+                try
+                {
+                    RecipeVersioningService.CreateVersion(
+                        currentRecipe.Id,
+                        $"Auto {DateTime.Now:yyyy-MM-dd HH:mm}",
+                        changeDescription,
+                        "System"
+                    );
+                }
+                catch (Exception ex)
+                {
+                    // Silent fail - versioning shouldn't break the main functionality
+                    System.Diagnostics.Debug.WriteLine($"Auto-version failed: {ex.Message}");
+                }
+            }
+        }
+
+        private void CreateInitialVersion()
+        {
+            if (currentRecipe.Id > 0)
+            {
+                try
+                {
+                    RecipeVersioningService.CreateVersion(
+                        currentRecipe.Id,
+                        "Initial Version",
+                        "Recipe created",
+                        "System"
+                    );
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Initial version creation failed: {ex.Message}");
+                }
+            }
+        }
+
+        // ========== END VERSIONING INTEGRATION ==========
+
+        private void CheckRecipeNameAvailability()
+        {
+            string currentName = txtRecipeName.Text.Trim();
+            
+            if (string.IsNullOrEmpty(currentName))
+                return;
+                
+            // Check if the name already exists (excluding current recipe)
+            var exists = allRecipes.Any(r => 
+                r.Name.Equals(currentName, StringComparison.OrdinalIgnoreCase) && 
+                r.Id != currentRecipe.Id);
+            
+            if (exists)
+            {
+                txtRecipeName.ForeColor = Color.Red;
+            }
+            else
+            {
+                txtRecipeName.ForeColor = SystemColors.WindowText;
+            }
+        }
+
+        // Update the LoadSelectedRecipe method to enable the Version History button
+        private void LoadSelectedRecipe()
+        {
+            try
+            {
+                if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
+                {
+                    currentRecipe = selectedRecipe;
+                    
+                    // Load recipe ingredients from database
+                    currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
+
+                    txtRecipeName.Text = currentRecipe.Name ?? "Unnamed Recipe";
+                    txtBatchYield.Text = currentRecipe.BatchYield.ToString();
+                    
+                    // Load category
+                    cmbCategory.Text = currentRecipe.Category ?? "";
+                    
+                    // Load tags - convert from comma-separated string to display format
+                    if (!string.IsNullOrEmpty(currentRecipe.Tags))
+                    {
+                        txtTags.Text = currentRecipe.Tags.Replace(",", ", ");
+                    }
+                    else
+                    {
+                        txtTags.Text = "";
+                    }
+                    
+                    // Validate and fix food cost percentage if needed
+                    if (currentRecipe.TargetFoodCostPercentage <= 0 || currentRecipe.TargetFoodCostPercentage > 1)
+                    {
+                        currentRecipe.TargetFoodCostPercentage = 0.30m; // Default to 30%
+                    }
+                    
+                    var foodCostPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("0");
+                    var matchingItem = cmbFoodCost.Items.Cast<string>()
+                        .FirstOrDefault(item => item.Replace("%", "") == foodCostPercent);
+                    
+                    if (matchingItem != null)
+                        cmbFoodCost.SelectedItem = matchingItem;
+                    else
+                        cmbFoodCost.SelectedIndex = 1; // Default to 30%
+                    
+                    RefreshIngredientsGrid();
+                    CalculateCost();
+                    UpdateRecipeCountDisplay();
+                    
+                    // Enable version history button for loaded recipes
+                    btnVersionHistory.Enabled = true;
+                    
+                    // Update duplicate checking
+                    CheckRecipeNameAvailability();
+                    
+                    // Show category and tags in status
+                    var categoryInfo = string.IsNullOrEmpty(currentRecipe.Category) ? "" : $" | Category: {currentRecipe.Category}";
+                    var tagsInfo = !string.IsNullOrEmpty(currentRecipe.Tags) ? $" | Tags: {currentRecipe.Tags}" : "";
+                    
+                    MessageBox.Show($"Loaded recipe: {currentRecipe.Name}{categoryInfo}{tagsInfo}\nIngredients loaded: {currentIngredients.Count}", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("Please select a valid recipe to load.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading recipe: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Update the InitializeNewRecipe method to disable the Version History button
+        private void InitializeNewRecipe()
+        {
+            currentRecipe = new Recipe { 
+                Name = "New Recipe", 
+                Category = "",
+                Tags = "",
+                BatchYield = 1, 
+                TargetFoodCostPercentage = 0.3m 
+            };
+            currentIngredients.Clear();
+            cmbCategory.Text = "";
+            txtTags.Text = "";
+            RefreshIngredientsGrid();
+            UpdateRecipeCountDisplay();
+            btnVersionHistory.Enabled = false; // Disable version history button for new recipes
+            CheckRecipeNameAvailability();
+        }
+
+        private void SaveRecipe()
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(txtRecipeName.Text))
+                {
+                    MessageBox.Show("Please enter a recipe name.", "Validation Error", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    txtRecipeName.Focus();
+                    return;
+                }
+
+                if (currentIngredients.Count == 0)
+                {
+                    MessageBox.Show("Please add at least one ingredient to the recipe.", "Validation Error", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // === STRICT DUPLICATE CHECK ===
+                string newRecipeName = txtRecipeName.Text.Trim();
+                
+                // Check for duplicates (exclude current recipe from the check)
+                var duplicateRecipe = allRecipes.FirstOrDefault(r => 
+                    r.Name.Equals(newRecipeName, StringComparison.OrdinalIgnoreCase) && 
+                    r.Id != currentRecipe.Id);
+                
+                if (duplicateRecipe != null)
+                {
+                    MessageBox.Show($"A recipe named '{newRecipeName}' already exists.\n\nPlease choose a different name.", 
+                        "Duplicate Recipe Name", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    txtRecipeName.Focus();
+                    txtRecipeName.SelectAll();
+                    return;
+                }
+                // === END STRICT DUPLICATE CHECK ===
+
+                // Update current recipe with form data
+                currentRecipe.Name = newRecipeName;
+                currentRecipe.Category = cmbCategory.Text.Trim();
+                UpdateRecipeTags();
+
+                // Update batch yield and food cost from form
+                if (int.TryParse(txtBatchYield.Text, out int batchYield))
+                    currentRecipe.BatchYield = batchYield;
+
+                if (cmbFoodCost.SelectedItem != null)
+                {
+                    var percent = cmbFoodCost.SelectedItem.ToString().Replace("%", "");
+                    if (decimal.TryParse(percent, out decimal foodCost))
+                        currentRecipe.TargetFoodCostPercentage = foodCost / 100m;
+                }
+
+                bool shouldSave = true;
+                bool isNewRecipe = currentRecipe.Id == 0;
+
+                // Show save options dialog
+                var saveResult = MessageBox.Show(
+                    $"Recipe: {newRecipeName}\n\n" +
+                    "How would you like to save?\n\n" +
+                    "• Yes: Save/Update this recipe\n" +
+                    "• No: Save as a copy with different name\n" +
+                    "• Cancel: Go back to editing",
+                    "Save Recipe",
+                    MessageBoxButtons.YesNoCancel, 
+                    MessageBoxIcon.Question);
+
+                if (saveResult == DialogResult.Yes)
+                {
+                    // Save/Update the recipe
+                    if (currentRecipe.Id == 0)
+                    {
+                        isNewRecipe = true;
+                    }
+                    else
+                    {
+                        isNewRecipe = false;
+                    }
+                }
+                else if (saveResult == DialogResult.No)
+                {
+                    // Save as copy - create new recipe (clone)
+                    currentRecipe.Id = 0;
+                    isNewRecipe = true;
+                    
+                    // Always prompt for new name when cloning
+                    string newName = ShowSaveAsDialog(newRecipeName);
+                    if (!string.IsNullOrEmpty(newName))
+                    {
+                        // Check if the new name is also a duplicate
+                        var newNameDuplicate = allRecipes.Any(r => 
+                            r.Name.Equals(newName, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (newNameDuplicate)
+                        {
+                            MessageBox.Show($"A recipe named '{newName}' already exists.\n\nPlease choose a different name.", 
+                                "Duplicate Recipe Name", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                        
+                        currentRecipe.Name = newName;
+                        txtRecipeName.Text = currentRecipe.Name;
+                    }
+                    else
+                    {
+                        shouldSave = false; // User cancelled
+                    }
+                }
+                else
+                {
+                    shouldSave = false; // User cancelled
+                }
+
+                if (shouldSave)
+                {
+                    if (isNewRecipe)
+                    {
+                        // Insert new recipe
+                        DatabaseContext.InsertRecipe(currentRecipe);
+                        
+                        // Get the newly created recipe ID
+                        var allRecipesAfterInsert = DatabaseContext.GetAllRecipes();
+                        var newRecipe = allRecipesAfterInsert
+                            .FirstOrDefault(r => r.Name.Equals(currentRecipe.Name, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (newRecipe != null)
+                        {
+                            currentRecipe.Id = newRecipe.Id;
+                            
+                            // Create initial version for new recipes
+                            CreateInitialVersion();
+                        }
+                    }
+                    else
+                    {
+                        // Update existing recipe
+                        DatabaseContext.UpdateRecipe(currentRecipe);
+                        
+                        // Create version for recipe updates
+                        CreateVersionForChange("Recipe updated");
+                    }
+
+                    // Save ingredients
+                    SaveRecipeIngredients();
+
+                    string message = isNewRecipe ? 
+                        $"New recipe '{currentRecipe.Name}' saved successfully!" : 
+                        $"Recipe '{currentRecipe.Name}' updated successfully!";
+                        
+                    MessageBox.Show(message, "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    // Refresh the recipes list and trigger update event
+                    LoadExistingRecipes();
+                    RecipesUpdated?.Invoke();
+                    UpdateRecipeCountDisplay();
+                    btnVersionHistory.Enabled = true; // Enable version history button after saving
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ConfigureIngredientsGrid()
+        {
+            try
+            {
+                // Clear existing columns
+                dataGridViewIngredients.Columns.Clear();
+                
+                // Add columns manually for better control
+                var columns = new[]
+                {
+                    new DataGridViewTextBoxColumn { Name = "IngredientName", HeaderText = "Ingredient", DataPropertyName = "IngredientName", ReadOnly = true, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill },
+                    new DataGridViewTextBoxColumn { Name = "Quantity", HeaderText = "Quantity", DataPropertyName = "Quantity", ReadOnly = false },
+                    new DataGridViewTextBoxColumn { Name = "Unit", HeaderText = "Unit", DataPropertyName = "Unit", ReadOnly = true },
+                    new DataGridViewTextBoxColumn { Name = "UnitPrice", HeaderText = "Unit Price", DataPropertyName = "UnitPrice", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = $"{currencySymbol}0.0000" } },
+                    new DataGridViewTextBoxColumn { Name = "LineCost", HeaderText = "Line Cost", DataPropertyName = "LineCost", ReadOnly = true, DefaultCellStyle = new DataGridViewCellStyle { Format = $"{currencySymbol}0.00" } },
+                    new DataGridViewTextBoxColumn { Name = "Supplier", HeaderText = "Supplier", DataPropertyName = "Supplier", ReadOnly = true }
+                };
+                
+                dataGridViewIngredients.Columns.AddRange(columns);
+                
+                // Hide ID columns - they'll be in the data source but not visible
+                dataGridViewIngredients.AutoGenerateColumns = false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error configuring ingredients grid: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateUnitDisplay()
+        {
+            try
+            {
+                if (cmbIngredients.SelectedItem is Ingredient selectedIngredient)
+                {
+                    lblUnitDisplay.Text = selectedIngredient.Unit ?? "grams";
+                }
+                else
+                {
+                    lblUnitDisplay.Text = "grams"; // Default unit
+                }
+            }
+            catch (Exception ex)
+            {
+                lblUnitDisplay.Text = "grams";
+            }
         }
 
         private void dataGridViewIngredients_CellEndEdit(object sender, DataGridViewCellEventArgs e)
@@ -334,7 +767,15 @@ namespace CostChef
                 if (row.Cells["Quantity"].Value != null && 
                     decimal.TryParse(row.Cells["Quantity"].Value.ToString(), out decimal newQuantity))
                 {
+                    var oldQuantity = ingredient.Quantity;
                     ingredient.Quantity = newQuantity;
+                    
+                    // Create version when quantity changes significantly
+                    if (currentRecipe.Id > 0 && Math.Abs(oldQuantity - newQuantity) > 0.1m)
+                    {
+                        CreateVersionForChange($"Changed {ingredient.IngredientName} quantity from {oldQuantity} to {newQuantity} {ingredient.Unit}");
+                    }
+                    
                     this.BeginInvoke(new Action(() =>
                     {
                         RefreshIngredientsGrid();
@@ -375,6 +816,9 @@ namespace CostChef
                 }
                 
                 UpdateRecipeCountDisplay();
+                
+                // Refresh duplicate checking after loading recipes
+                CheckRecipeNameAvailability();
             }
             catch (Exception ex)
             {
@@ -611,11 +1055,8 @@ namespace CostChef
                 var filteredRecipes = allRecipes
                     .Where(recipe =>
                         (recipe.Name ?? "").ToLowerInvariant().Contains(searchTerm) ||
-                        (recipe.Description ?? "").ToLowerInvariant().Contains(searchTerm) ||
                         (recipe.Category ?? "").ToLowerInvariant().Contains(searchTerm) ||
-                        ((recipe.Tags ?? "").ToLowerInvariant().Contains(searchTerm)) ||
-                        (recipe.Ingredients != null && recipe.Ingredients.Any(i => 
-                            (i.IngredientName ?? "").ToLowerInvariant().Contains(searchTerm)))
+                        ((recipe.Tags ?? "").ToLowerInvariant().Contains(searchTerm))
                     )
                     .OrderBy(r => r.Name)
                     .ToList();
@@ -644,64 +1085,6 @@ namespace CostChef
             }
         }
 
-        private void LoadSelectedRecipe()
-        {
-            try
-            {
-                if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
-                {
-                    currentRecipe = selectedRecipe;
-                    
-                    // Load recipe ingredients from database
-                    currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
-
-                    txtRecipeName.Text = currentRecipe.Name ?? "Unnamed Recipe";
-                    txtBatchYield.Text = currentRecipe.BatchYield.ToString();
-                    
-                    // Load category
-                    cmbCategory.Text = currentRecipe.Category ?? "";
-                    
-                    // Load tags - convert from comma-separated string to display format
-                    if (!string.IsNullOrEmpty(currentRecipe.Tags))
-                    {
-                        txtTags.Text = currentRecipe.Tags.Replace(",", ", ");
-                    }
-                    else
-                    {
-                        txtTags.Text = "";
-                    }
-                    
-                    var foodCostPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("0");
-                    var matchingItem = cmbFoodCost.Items.Cast<string>()
-                        .FirstOrDefault(item => item.Replace("%", "") == foodCostPercent);
-                    
-                    if (matchingItem != null)
-                        cmbFoodCost.SelectedItem = matchingItem;
-                    
-                    RefreshIngredientsGrid();
-                    CalculateCost();
-                    UpdateRecipeCountDisplay();
-                    
-                    // Show category and tags in status
-                    var categoryInfo = string.IsNullOrEmpty(currentRecipe.Category) ? "" : $" | Category: {currentRecipe.Category}";
-                    var tagsInfo = !string.IsNullOrEmpty(currentRecipe.Tags) ? $" | Tags: {currentRecipe.Tags}" : "";
-                    
-                    MessageBox.Show($"Loaded recipe: {currentRecipe.Name}{categoryInfo}{tagsInfo}", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("Please select a valid recipe to load.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading recipe: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void LoadIngredientsComboBox()
         {
             try
@@ -712,6 +1095,9 @@ namespace CostChef
                     cmbIngredients.DataSource = ingredients;
                     cmbIngredients.DisplayMember = "Name";
                     cmbIngredients.ValueMember = "Id";
+                    
+                    // Set initial unit display
+                    UpdateUnitDisplay();
                 }
                 else
                 {
@@ -723,22 +1109,6 @@ namespace CostChef
                 MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private void InitializeNewRecipe()
-        {
-            currentRecipe = new Recipe { 
-                Name = "New Recipe", 
-                Category = "",
-                Tags = "",
-                BatchYield = 1, 
-                TargetFoodCostPercentage = 0.3m 
-            };
-            currentIngredients.Clear();
-            cmbCategory.Text = "";
-            txtTags.Text = "";
-            RefreshIngredientsGrid();
-            UpdateRecipeCountDisplay();
         }
 
         private void AddIngredientToRecipe()
@@ -761,7 +1131,14 @@ namespace CostChef
                 CalculateCost();
                 UpdateRecipeCountDisplay();
                 
+                // Create version when ingredient is added
+                if (currentRecipe.Id > 0)
+                {
+                    CreateVersionForChange($"Added {quantity} {selectedIngredient.Unit} of {selectedIngredient.Name}");
+                }
+                
                 txtQuantity.Text = "100";
+                UpdateUnitDisplay();
             }
             else
             {
@@ -779,6 +1156,12 @@ namespace CostChef
                 RefreshIngredientsGrid();
                 CalculateCost();
                 UpdateRecipeCountDisplay();
+                
+                // Create version when ingredient is removed
+                if (currentRecipe.Id > 0)
+                {
+                    CreateVersionForChange($"Removed {selected.IngredientName}");
+                }
             }
         }
 
@@ -790,34 +1173,85 @@ namespace CostChef
                 dataGridViewIngredients.DataSource = null;
                 dataGridViewIngredients.DataSource = currentIngredients.ToList();
                 
-                if (dataGridViewIngredients.Columns.Count > 0)
-                {
-                    // Format currency columns
-                    foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
-                    {
-                        if (column.Name == "LineCost" || column.DataPropertyName == "LineCost")
-                            column.DefaultCellStyle.Format = $"{currencySymbol}0.00";
-                        if (column.Name == "UnitPrice" || column.DataPropertyName == "UnitPrice")
-                            column.DefaultCellStyle.Format = $"{currencySymbol}0.0000";
-                    }
-                    
-                    // Hide ID column
-                    var idColumn = dataGridViewIngredients.Columns.Cast<DataGridViewColumn>()
-                        .FirstOrDefault(c => c.Name == "IngredientId" || c.DataPropertyName == "IngredientId");
-                    if (idColumn != null)
-                        idColumn.Visible = false;
-                    
-                    // Make only Quantity column editable
-                    foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
-                    {
-                        column.ReadOnly = (column.Name != "Quantity" && column.DataPropertyName != "Quantity");
-                    }
-                }
+                // Auto-size columns for better display
+                dataGridViewIngredients.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
                 dataGridViewIngredients.ResumeLayout();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error refreshing ingredients grid: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void SaveRecipeIngredients()
+        {
+            try
+            {
+                if (currentRecipe.Id <= 0)
+                {
+                    throw new InvalidOperationException("Recipe ID is not valid. Cannot save ingredients.");
+                }
+
+                // Delete ALL existing ingredients for this recipe first
+                var existingIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
+                foreach (var existing in existingIngredients)
+                {
+                    DatabaseContext.DeleteRecipeIngredient(existing.Id);
+                }
+
+                // Now save all current ingredients with the correct RecipeId
+                foreach (var recipeIngredient in currentIngredients)
+                {
+                    // Use the DatabaseContext method to add the ingredient
+                    DatabaseContext.AddRecipeIngredient(new RecipeIngredient
+                    {
+                        RecipeId = currentRecipe.Id,
+                        IngredientId = recipeIngredient.IngredientId,
+                        Quantity = recipeIngredient.Quantity
+                    });
+                }
+
+                // Refresh the current ingredients from database to get proper IDs
+                currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving recipe ingredients: {ex.Message}", "Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                throw;
+            }
+        }
+
+        private void DeleteRecipe()
+        {
+            try
+            {
+                if (currentRecipe.Id == 0)
+                {
+                    MessageBox.Show("No recipe loaded to delete.", "Information", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var result = MessageBox.Show($"Are you sure you want to delete recipe '{currentRecipe.Name}'? This action cannot be undone.", 
+                    "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                if (result == DialogResult.Yes)
+                {
+                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
+                    MessageBox.Show("Recipe deleted successfully!", "Success", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    
+                    // Refresh and reset form
+                    LoadExistingRecipes();
+                    InitializeNewRecipe();
+                    RecipesUpdated?.Invoke();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error deleting recipe: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -832,228 +1266,94 @@ namespace CostChef
 
             decimal totalCost = currentIngredients.Sum(i => i.LineCost);
             decimal costPerServing = currentRecipe.BatchYield > 0 ? totalCost / currentRecipe.BatchYield : totalCost;
-            
+
+            // Calculate suggested prices
             decimal suggestedPrice25 = costPerServing > 0 ? Math.Round((costPerServing / 0.25m) / 5, 0) * 5 : 0;
             decimal suggestedPrice30 = costPerServing > 0 ? Math.Round((costPerServing / 0.30m) / 5, 0) * 5 : 0;
             decimal suggestedPrice35 = costPerServing > 0 ? Math.Round((costPerServing / 0.35m) / 5, 0) * 5 : 0;
-            decimal targetPrice = costPerServing > 0 && currentRecipe.TargetFoodCostPercentage > 0 ? 
-                Math.Round((costPerServing / currentRecipe.TargetFoodCostPercentage) / 5, 0) * 5 : 0;
+            
+            // Ensure target food cost percentage is valid and calculate target price
+            decimal targetPrice = 0;
+            decimal targetFoodCostPercentage = currentRecipe.TargetFoodCostPercentage;
+            
+            // Validate and fix the target food cost percentage if needed
+            if (targetFoodCostPercentage <= 0 || targetFoodCostPercentage > 1)
+            {
+                // Default to 30% if invalid
+                targetFoodCostPercentage = 0.30m;
+                currentRecipe.TargetFoodCostPercentage = targetFoodCostPercentage;
+            }
+            
+            if (costPerServing > 0 && targetFoodCostPercentage > 0)
+            {
+                targetPrice = Math.Round((costPerServing / targetFoodCostPercentage) / 5, 0) * 5;
+            }
 
-            string summary = $@"Recipe: {currentRecipe.Name}
-Total Cost: {currencySymbol}{totalCost:F2} | Cost per Serving: {currencySymbol}{costPerServing:F2}
-Suggested Prices: 25%: {currencySymbol}{suggestedPrice25} | 30%: {currencySymbol}{suggestedPrice30} | 35%: {currencySymbol}{suggestedPrice35}
-Target Price ({currentRecipe.TargetFoodCostPercentage:P0}): {currencySymbol}{targetPrice}";
+            // Format the percentage correctly (0.30 becomes 30%, not 3000%)
+            string foodCostPercentDisplay = (targetFoodCostPercentage * 100).ToString("0") + "%";
+
+            // Using regular string concatenation to avoid any verbatim string issues
+            string summary = "Recipe: " + currentRecipe.Name + Environment.NewLine +
+                            "Total Cost: " + currencySymbol + totalCost.ToString("F2") + " | Cost per Serving: " + currencySymbol + costPerServing.ToString("F2") + Environment.NewLine +
+                            "Suggested Prices: 25%: " + currencySymbol + suggestedPrice25 + " | 30%: " + currencySymbol + suggestedPrice30 + " | 35%: " + currencySymbol + suggestedPrice35 + Environment.NewLine +
+                            "Target Price (" + foodCostPercentDisplay + "): " + currencySymbol + targetPrice;
 
             lblCostSummary.Text = summary;
         }
 
-        // NEW: Version History method
-        private void ShowVersionHistory()
+        private string ShowSaveAsDialog(string currentName)
         {
-            if (currentRecipe == null || currentRecipe.Id == 0)
+            using (var form = new Form())
             {
-                MessageBox.Show("Please save the recipe first to view version history.", 
-                    "Recipe Not Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
+                form.Text = "Save Recipe As Copy";
+                form.Size = new System.Drawing.Size(400, 200);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
 
-            var versionForm = new RecipeVersionHistoryForm(currentRecipe.Id, currentRecipe.Name);
-            if (versionForm.ShowDialog() == DialogResult.OK)
-            {
-                // Refresh the recipe if a version was restored
-                LoadSelectedRecipe();
-            }
-        }
-
-        private void SaveRecipe()
-        {
-            if (string.IsNullOrWhiteSpace(currentRecipe.Name))
-            {
-                MessageBox.Show("Please enter a recipe name.", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            try
-            {
-                bool isNewRecipe = (currentRecipe.Id == 0);
+                var lblPrompt = new Label();
+                lblPrompt.Location = new System.Drawing.Point(20, 20);
+                lblPrompt.Size = new System.Drawing.Size(350, 40);
+                lblPrompt.Text = "Enter a name for the recipe copy:";
                 
-                if (!isNewRecipe)
-                {
-                    // Recipe is being modified - ask user what they want to do
-                    var result = MessageBox.Show(
-                        $"Recipe '{currentRecipe.Name}' already exists.\n\n" +
-                        "What would you like to do?\n\n" +
-                        "• 'Yes' - Overwrite the existing recipe\n" +
-                        "• 'No' - Save as a new recipe with a different name\n" +
-                        "• 'Cancel' - Go back and make changes",
-                        "Save Recipe Options",
-                        MessageBoxButtons.YesNoCancel,
-                        MessageBoxIcon.Question,
-                        MessageBoxDefaultButton.Button3);
+                var txtNewName = new TextBox();
+                txtNewName.Location = new System.Drawing.Point(20, 60);
+                txtNewName.Size = new System.Drawing.Size(350, 20);
+                txtNewName.Text = currentName + " Copy";
+                txtNewName.SelectAll();
+                
+                var btnOK = new Button();
+                btnOK.Location = new System.Drawing.Point(200, 100);
+                btnOK.Size = new System.Drawing.Size(80, 30);
+                btnOK.Text = "OK";
+                btnOK.DialogResult = DialogResult.OK;
+                
+                var btnCancel = new Button();
+                btnCancel.Location = new System.Drawing.Point(290, 100);
+                btnCancel.Size = new System.Drawing.Size(80, 30);
+                btnCancel.Text = "Cancel";
+                btnCancel.DialogResult = DialogResult.Cancel;
 
-                    switch (result)
+                form.Controls.AddRange(new Control[] {
+                    lblPrompt, txtNewName, btnOK, btnCancel
+                });
+
+                form.AcceptButton = btnOK;
+                form.CancelButton = btnCancel;
+
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    var newName = txtNewName.Text.Trim();
+                    if (string.IsNullOrWhiteSpace(newName))
                     {
-                        case DialogResult.Yes:
-                            // Overwrite existing recipe and create version
-                            DatabaseContext.UpdateRecipe(currentRecipe);
-                            
-                            // Create version history
-                            RecipeVersioningService.CreateVersion(currentRecipe.Id, 
-                                $"Auto-save {DateTime.Now:yyyy-MM-dd HH:mm}",
-                                "Automatic version created on save",
-                                "System");
-                            
-                            MessageBox.Show($"Recipe '{currentRecipe.Name}' updated successfully!", "Success", 
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            break;
-                            
-                        case DialogResult.No:
-                            // Save as new recipe - prompt for new name
-                            using (var nameDialog = new Form())
-                            {
-                                nameDialog.Text = "Save As New Recipe";
-                                nameDialog.Size = new System.Drawing.Size(350, 150);
-                                nameDialog.StartPosition = FormStartPosition.CenterParent;
-                                nameDialog.FormBorderStyle = FormBorderStyle.FixedDialog;
-                                nameDialog.MaximizeBox = false;
-                                
-                                var lblNewName = new Label { Text = "New Recipe Name:", Location = new System.Drawing.Point(20, 20), Size = new System.Drawing.Size(100, 20) };
-                                var txtNewName = new TextBox { Text = $"{currentRecipe.Name} (Copy)", Location = new System.Drawing.Point(120, 17), Size = new System.Drawing.Size(200, 20) };
-                                var btnOk = new Button { Text = "OK", Location = new System.Drawing.Point(120, 50), Size = new System.Drawing.Size(75, 30), DialogResult = DialogResult.OK };
-                                var btnCancel = new Button { Text = "Cancel", Location = new System.Drawing.Point(205, 50), Size = new System.Drawing.Size(75, 30), DialogResult = DialogResult.Cancel };
-                                
-                                nameDialog.Controls.AddRange(new Control[] { lblNewName, txtNewName, btnOk, btnCancel });
-                                nameDialog.AcceptButton = btnOk;
-                                nameDialog.CancelButton = btnCancel;
-                                
-                                if (nameDialog.ShowDialog() == DialogResult.OK)
-                                {
-                                    var newName = txtNewName.Text.Trim();
-                                    if (!string.IsNullOrEmpty(newName))
-                                    {
-                                        // Create a copy of the current recipe with new name and ID
-                                        var newRecipe = new Recipe
-                                        {
-                                            Name = newName,
-                                            Description = currentRecipe.Description,
-                                            Category = currentRecipe.Category,
-                                            Tags = currentRecipe.Tags,
-                                            BatchYield = currentRecipe.BatchYield,
-                                            TargetFoodCostPercentage = currentRecipe.TargetFoodCostPercentage
-                                        };
-                                        
-                                        // Save the new recipe
-                                        DatabaseContext.InsertRecipe(newRecipe);
-                                        
-                                        // Now save all the ingredients for the new recipe
-                                        foreach (var ingredient in currentIngredients)
-                                        {
-                                            var newRecipeIngredient = new RecipeIngredient
-                                            {
-                                                RecipeId = newRecipe.Id,
-                                                IngredientId = ingredient.IngredientId,
-                                                Quantity = ingredient.Quantity
-                                            };
-                                            DatabaseContext.AddRecipeIngredient(newRecipeIngredient);
-                                        }
-                                        
-                                        // Update the current recipe to the new one
-                                        currentRecipe = newRecipe;
-                                        currentRecipe.Id = newRecipe.Id;
-                                        
-                                        MessageBox.Show($"Recipe '{newRecipe.Name}' saved successfully as a new recipe!", "Success", 
-                                            MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                    }
-                                    else
-                                    {
-                                        MessageBox.Show("Please enter a valid recipe name.", "Error", 
-                                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                        return;
-                                    }
-                                }
-                                else
-                                {
-                                    return;
-                                }
-                            }
-                            break;
-                            
-                        case DialogResult.Cancel:
-                            return;
+                        MessageBox.Show("Please enter a valid recipe name.", "Validation Error", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return ShowSaveAsDialog(currentName);
                     }
-                }
-                else
-                {
-                    // This is a brand new recipe
-                    DatabaseContext.InsertRecipe(currentRecipe);
-                    MessageBox.Show($"Recipe '{currentRecipe.Name}' saved successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return newName;
                 }
                 
-                // Add new category to available categories if it doesn't exist
-                if (!string.IsNullOrEmpty(currentRecipe.Category) && 
-                    !cmbCategory.Items.Cast<string>().Any(c => 
-                        c.Equals(currentRecipe.Category, StringComparison.OrdinalIgnoreCase)))
-                {
-                    cmbCategory.Items.Add(currentRecipe.Category);
-                }
-                
-                LoadExistingRecipes();
-                UpdateRecipeCountDisplay();
-                RecipesUpdated?.Invoke();
-                
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void DeleteRecipe()
-        {
-            if (currentRecipe == null || currentRecipe.Id == 0)
-            {
-                MessageBox.Show("No recipe loaded to delete.\n\nPlease load an existing recipe first, or save the current recipe before deleting.", 
-                    "No Recipe Loaded", 
-                    MessageBoxButtons.OK, 
-                    MessageBoxIcon.Information);
-                return;
-            }
-
-            var result = MessageBox.Show(
-                $"Are you sure you want to delete '{currentRecipe.Name}'?\n\nThis action cannot be undone!", 
-                "Confirm Delete", 
-                MessageBoxButtons.YesNo, 
-                MessageBoxIcon.Warning, 
-                MessageBoxDefaultButton.Button2);
-
-            if (result == DialogResult.Yes)
-            {
-                try
-                {
-                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
-                    MessageBox.Show($"Recipe '{currentRecipe.Name}' deleted successfully!", 
-                        "Success", 
-                        MessageBoxButtons.OK, 
-                        MessageBoxIcon.Information);
-                    
-                    // Reset to new recipe after deletion
-                    InitializeNewRecipe();
-                    LoadExistingRecipes();
-                    
-                    UpdateRecipeCountDisplay();
-                    RecipesUpdated?.Invoke();
-                    
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error deleting recipe: {ex.Message}", 
-                        "Error", 
-                        MessageBoxButtons.OK, 
-                        MessageBoxIcon.Error);
-                }
+                return null; // User cancelled
             }
         }
     }

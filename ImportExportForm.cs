@@ -369,36 +369,33 @@ namespace CostChef
 
         private void ImportIngredients()
         {
-            try
+            using (var openDialog = new OpenFileDialog())
             {
-                using (var openDialog = new OpenFileDialog())
-                {
-                    openDialog.Filter = "CSV files (*.csv)|*.csv";
-                    openDialog.Multiselect = true;
-                    openDialog.Title = "Import Ingredients from CSV";
+                openDialog.Filter = "CSV files (*.csv)|*.csv";
+                openDialog.Multiselect = false; // Changed to single file selection for simplicity
+                openDialog.Title = "Import Ingredients from CSV";
 
-                    if (openDialog.ShowDialog() == DialogResult.OK)
+                if (openDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
                     {
-                        var ingredients = ImportExportService.ImportIngredientsFromCsv(openDialog.FileName);
-                        if (ingredients != null && ingredients.Count > 0)
-                        {
-                            // Save ingredients to database
-                            foreach (var ingredient in ingredients)
-                            {
-                                DatabaseContext.InsertIngredient(ingredient);
-                            }
-                            MessageBox.Show($"{ingredients.Count} ingredients imported successfully!", "Import Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show("No ingredients found in the file or failed to import.", "Import Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
+                        // Use the new duplicate-handling method
+                        var result = ImportExportService.ImportIngredientsWithDuplicateHandling(openDialog.FileName);
+                        
+                        string message = $"Import completed:\n" +
+                                       $"{result.imported} new ingredients imported\n" +
+                                       $"{result.updated} existing ingredients updated\n" +
+                                       $"{result.skipped} duplicates skipped";
+                        
+                        MessageBox.Show(message, "Import Complete", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error importing ingredients: {ex.Message}", "Error", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error importing ingredients: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

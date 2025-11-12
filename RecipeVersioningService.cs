@@ -22,7 +22,11 @@ namespace CostChef
             {
                 // Get current recipe and ingredients
                 var recipe = DatabaseContext.GetAllRecipes().FirstOrDefault(r => r.Id == recipeId);
-                if (recipe == null) return;
+                if (recipe == null) 
+                {
+                    System.Diagnostics.Debug.WriteLine($"Recipe not found: {recipeId}");
+                    return;
+                }
 
                 var ingredients = DatabaseContext.GetRecipeIngredients(recipeId);
                 
@@ -46,10 +50,13 @@ namespace CostChef
 
                 // Save to database
                 SaveRecipeVersion(recipeId, nextVersion, versionName, versionNotes, createdBy, recipeJson, true);
+                
+                System.Diagnostics.Debug.WriteLine($"Version created for recipe {recipeId}: {versionName} (v{nextVersion})");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error creating recipe version: {ex.Message}");
+                // Don't throw - versioning shouldn't break the main functionality
             }
         }
 
@@ -134,7 +141,7 @@ namespace CostChef
                                 VersionNumber = SafeGetInt(reader, "version_number"),
                                 VersionName = SafeGetString(reader, "version_name"),
                                 VersionNotes = SafeGetString(reader, "version_notes"),
-                                CreatedDate = DateTime.Parse(SafeGetString(reader, "created_date")),
+                                CreatedDate = SafeGetDateTime(reader, "created_date"),
                                 CreatedBy = SafeGetString(reader, "created_by"),
                                 IsCurrent = SafeGetBool(reader, "is_current"),
                                 RecipeData = SafeGetString(reader, "recipe_data")
@@ -215,6 +222,28 @@ namespace CostChef
                 return false;
             }
         }
+
+        private static DateTime SafeGetDateTime(SQLiteDataReader reader, string columnName)
+        {
+            try
+            {
+                int ordinal = reader.GetOrdinal(columnName);
+                if (reader.IsDBNull(ordinal))
+                    return DateTime.MinValue;
+                
+                var value = reader.GetValue(ordinal);
+                if (value is DateTime dateTime)
+                    return dateTime;
+                if (value is string dateString && DateTime.TryParse(dateString, out DateTime parsedDate))
+                    return parsedDate;
+                    
+                return DateTime.MinValue;
+            }
+            catch
+            {
+                return DateTime.MinValue;
+            }
+        }
     }
 
     public class RecipeVersion
@@ -232,6 +261,9 @@ namespace CostChef
         // Computed properties
         public string DisplayName => $"{VersionName} (v{VersionNumber})";
         public string CreatedDisplay => CreatedDate.ToString("yyyy-MM-dd HH:mm");
+        
+        // ADD THIS MISSING PROPERTY - it's referenced in your DataGridView
+        public string CreatedByDisplay => CreatedBy ?? "System";
         
         public RecipeVersioningService.RecipeVersionData GetVersionData()
         {

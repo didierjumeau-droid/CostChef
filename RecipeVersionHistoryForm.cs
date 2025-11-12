@@ -1,5 +1,3 @@
-// [file name]: RecipeVersionHistoryForm.cs
-// [file content begin]
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -53,35 +51,46 @@ namespace CostChef
             this.lblRecipeName.TextAlign = ContentAlignment.MiddleLeft;
 
             // Version details label
-            this.lblVersionDetails.Text = "Select a version to view details or restore";
+            this.lblVersionDetails.Text = "Select versions to compare (use checkboxes for multiple selection)";
             this.lblVersionDetails.Location = new Point(20, 45);
             this.lblVersionDetails.Size = new Size(760, 20);
             this.lblVersionDetails.ForeColor = Color.Gray;
 
-            // Versions grid
+            // Versions grid - MAKE EDITABLE FOR CHECKBOXES
             this.gridVersions.Location = new Point(20, 75);
             this.gridVersions.Size = new Size(760, 300);
-            this.gridVersions.ReadOnly = true;
+            this.gridVersions.ReadOnly = false; // CHANGED TO FALSE
             this.gridVersions.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.gridVersions.AutoGenerateColumns = false;
             this.gridVersions.AllowUserToAddRows = false;
-            this.gridVersions.MultiSelect = false;
+            this.gridVersions.MultiSelect = true; // CHANGED TO TRUE for checkbox functionality
 
             // Configure grid columns
+            // Add selection checkbox column FIRST
+            this.gridVersions.Columns.Add(new DataGridViewCheckBoxColumn { 
+                Name = "colSelect", HeaderText = "Select", Width = 50,
+                ReadOnly = false // This column is editable
+            });
+            
             this.gridVersions.Columns.Add(new DataGridViewTextBoxColumn { 
-                Name = "colVersion", HeaderText = "Version", DataPropertyName = "DisplayName", Width = 150 
+                Name = "colVersion", HeaderText = "Version", DataPropertyName = "DisplayName", Width = 150,
+                ReadOnly = true // Make text columns read-only
             });
             this.gridVersions.Columns.Add(new DataGridViewTextBoxColumn { 
-                Name = "colCreated", HeaderText = "Created", DataPropertyName = "CreatedDisplay", Width = 120 
+                Name = "colCreated", HeaderText = "Created", DataPropertyName = "CreatedDisplay", Width = 120,
+                ReadOnly = true
             });
             this.gridVersions.Columns.Add(new DataGridViewTextBoxColumn { 
-                Name = "colCreatedBy", HeaderText = "By", DataPropertyName = "CreatedBy", Width = 100 
+                Name = "colCreatedBy", HeaderText = "By", DataPropertyName = "CreatedBy", Width = 100,
+                ReadOnly = true
             });
             this.gridVersions.Columns.Add(new DataGridViewTextBoxColumn { 
-                Name = "colNotes", HeaderText = "Notes", DataPropertyName = "VersionNotes", Width = 250 
+                Name = "colNotes", HeaderText = "Notes", DataPropertyName = "VersionNotes", Width = 250,
+                ReadOnly = true
             });
             this.gridVersions.Columns.Add(new DataGridViewCheckBoxColumn { 
-                Name = "colCurrent", HeaderText = "Current", DataPropertyName = "IsCurrent", Width = 60 
+                Name = "colCurrent", HeaderText = "Current", DataPropertyName = "IsCurrent", Width = 60,
+                ReadOnly = true // Keep current version checkbox read-only
             });
 
             // Buttons
@@ -110,8 +119,19 @@ namespace CostChef
                 btnViewVersion, btnRestoreVersion, btnCompare, btnClose
             });
 
-            // Wire up selection changed
+            // Wire up events
             this.gridVersions.SelectionChanged += (s, e) => UpdateButtonStates();
+            this.gridVersions.CellValueChanged += (s, e) => UpdateButtonStates();
+            
+            // Add checkbox click handler
+            this.gridVersions.CellContentClick += (s, e) => 
+            {
+                if (e.ColumnIndex == 0) // Checkbox column
+                {
+                    gridVersions.EndEdit();
+                    UpdateButtonStates();
+                }
+            };
 
             this.ResumeLayout(false);
         }
@@ -141,7 +161,10 @@ namespace CostChef
             bool hasSelection = gridVersions.SelectedRows.Count > 0;
             btnViewVersion.Enabled = hasSelection;
             btnRestoreVersion.Enabled = hasSelection;
-            btnCompare.Enabled = gridVersions.SelectedRows.Count >= 2;
+            
+            // FIX: Use checkbox count instead of selected rows
+            int checkedCount = GetCheckedVersionCount();
+            btnCompare.Enabled = checkedCount >= 2;
 
             if (hasSelection && gridVersions.SelectedRows[0].DataBoundItem is RecipeVersion selectedVersion)
             {
@@ -150,6 +173,39 @@ namespace CostChef
                 // Disable restore for current version
                 btnRestoreVersion.Enabled = !selectedVersion.IsCurrent;
             }
+        }
+
+        // NEW METHOD: Count checked versions
+        private int GetCheckedVersionCount()
+        {
+            int count = 0;
+            foreach (DataGridViewRow row in gridVersions.Rows)
+            {
+                var checkboxCell = row.Cells["colSelect"] as DataGridViewCheckBoxCell;
+                if (checkboxCell?.Value != null && (bool)checkboxCell.Value)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        // NEW METHOD: Get checked versions for comparison
+        private List<RecipeVersion> GetCheckedVersions()
+        {
+            var versions = new List<RecipeVersion>();
+            foreach (DataGridViewRow row in gridVersions.Rows)
+            {
+                var checkboxCell = row.Cells["colSelect"] as DataGridViewCheckBoxCell;
+                if (checkboxCell?.Value != null && (bool)checkboxCell.Value)
+                {
+                    if (row.DataBoundItem is RecipeVersion version)
+                    {
+                        versions.Add(version);
+                    }
+                }
+            }
+            return versions;
         }
 
         private void ViewSelectedVersion()
@@ -281,68 +337,417 @@ namespace CostChef
 
         private void CompareVersions()
         {
-            if (gridVersions.SelectedRows.Count < 2)
+            // FIX: Use checkbox selection instead of row selection
+            var selectedVersions = GetCheckedVersions();
+            
+            if (selectedVersions.Count < 2)
             {
-                MessageBox.Show("Please select at least two versions to compare.", "Selection Required", 
+                MessageBox.Show("Please check at least two versions to compare.", "Selection Required", 
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            var selectedVersions = new List<RecipeVersion>();
-            foreach (DataGridViewRow row in gridVersions.SelectedRows)
-            {
-                if (row.DataBoundItem is RecipeVersion version)
-                {
-                    selectedVersions.Add(version);
-                }
-            }
-
-            if (selectedVersions.Count >= 2)
-            {
-                // For now, show a simple comparison - we can enhance this later
-                ShowSimpleComparison(selectedVersions);
-            }
+            ShowSimpleComparison(selectedVersions);
         }
 
         private void ShowSimpleComparison(List<RecipeVersion> versions)
         {
             var compareForm = new Form
             {
-                Text = "Version Comparison",
-                Size = new Size(700, 500),
-                StartPosition = FormStartPosition.CenterParent
+                Text = $"Version Comparison - {currentRecipeName}",
+                Size = new Size(900, 600),
+                StartPosition = FormStartPosition.CenterParent,
+                MinimumSize = new Size(900, 600)
             };
 
-            var comparisonText = new TextBox
+            var tabControl = new TabControl
+            {
+                Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI", 9)
+            };
+
+            // Summary Tab
+            var summaryTab = new TabPage("Summary Comparison");
+            CreateSummaryTab(summaryTab, versions);
+            tabControl.TabPages.Add(summaryTab);
+
+            // Detailed Tab
+            var detailedTab = new TabPage("Detailed Comparison");
+            CreateDetailedTab(detailedTab, versions);
+            tabControl.TabPages.Add(detailedTab);
+
+            // Ingredients Tab
+            var ingredientsTab = new TabPage("Ingredients Comparison");
+            CreateIngredientsTab(ingredientsTab, versions);
+            tabControl.TabPages.Add(ingredientsTab);
+
+            compareForm.Controls.Add(tabControl);
+            compareForm.ShowDialog();
+        }
+
+      private void CreateSummaryTab(TabPage tab, List<RecipeVersion> versions)
+{
+    var panel = new Panel
+    {
+        Dock = DockStyle.Fill,
+        AutoScroll = true,
+        Padding = new Padding(10)
+    };
+
+    int yPos = 10;
+    var headerLabel = new Label
+    {
+        Text = "VERSION COMPARISON SUMMARY",
+        Font = new Font("Segoe UI", 12, FontStyle.Bold),
+        Location = new Point(10, yPos),
+        Size = new Size(850, 25),
+        ForeColor = Color.Navy
+    };
+    panel.Controls.Add(headerLabel);
+    yPos += 35;
+
+    // Create comparison table
+    var tablePanel = new Panel
+    {
+        Location = new Point(10, yPos),
+        Size = new Size(850, 200),
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = Color.White
+    };
+
+    // Headers
+    var headers = new[] { "Metric", "Current", "Comparison" };
+    for (int i = 0; i < headers.Length; i++)
+    {
+        var header = new Label
+        {
+            Text = headers[i],
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Location = new Point(i * 280 + 10, 10),
+            Size = new Size(270, 20),
+            TextAlign = ContentAlignment.MiddleLeft,
+            BackColor = Color.LightGray
+        };
+        tablePanel.Controls.Add(header);
+    }
+
+    // Data rows
+    var currentVersion = versions.OrderByDescending(v => v.VersionNumber).First();
+    var compareVersion = versions.OrderByDescending(v => v.VersionNumber).Last();
+    
+    var currentData = currentVersion.GetVersionData();
+    var compareData = compareVersion.GetVersionData();
+
+    if (currentData != null && compareData != null)
+    {
+        // FIX: Use explicit type instead of implicit array
+        var metrics = new List<MetricComparison>
+        {
+            new MetricComparison { Name = "Total Cost", Current = currentData.TotalCost, Compare = compareData.TotalCost },
+            new MetricComparison { Name = "Cost per Serving", Current = currentData.CostPerServing, Compare = compareData.CostPerServing },
+            new MetricComparison { Name = "Number of Ingredients", Current = currentData.Ingredients.Count, Compare = compareData.Ingredients.Count },
+            new MetricComparison { Name = "Batch Yield", Current = currentData.Recipe.BatchYield, Compare = compareData.Recipe.BatchYield },
+            new MetricComparison { Name = "Target Food Cost %", Current = currentData.Recipe.TargetFoodCostPercentage, Compare = compareData.Recipe.TargetFoodCostPercentage }
+        };
+
+        for (int i = 0; i < metrics.Count; i++)
+        {
+            var metric = metrics[i];
+            int rowY = 40 + i * 30;
+
+            // Metric name
+            var nameLabel = new Label
+            {
+                Text = metric.Name,
+                Location = new Point(10, rowY),
+                Size = new Size(270, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            tablePanel.Controls.Add(nameLabel);
+
+            // Current value
+            var currentLabel = new Label
+            {
+                Text = FormatMetricValue(metric.Name, metric.Current),
+                Location = new Point(280, rowY),
+                Size = new Size(270, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            tablePanel.Controls.Add(currentLabel);
+
+            // Comparison value with color coding
+            var compareLabel = new Label
+            {
+                Text = FormatMetricValue(metric.Name, metric.Compare),
+                Location = new Point(550, rowY),
+                Size = new Size(270, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            // Color code based on whether it's better (green) or worse (red)
+            if (metric.Name.Contains("Cost") && metric.Current != metric.Compare)
+            {
+                compareLabel.ForeColor = metric.Compare < metric.Current ? Color.Green : Color.Red;
+                compareLabel.Font = new Font(compareLabel.Font, FontStyle.Bold);
+            }
+
+            tablePanel.Controls.Add(compareLabel);
+        }
+    }
+
+    panel.Controls.Add(tablePanel);
+    yPos += 220;
+
+    // Version details
+    var detailsLabel = new Label
+    {
+        Text = "VERSION DETAILS:",
+        Font = new Font("Segoe UI", 10, FontStyle.Bold),
+        Location = new Point(10, yPos),
+        Size = new Size(850, 20),
+        ForeColor = Color.DarkBlue
+    };
+    panel.Controls.Add(detailsLabel);
+    yPos += 30;
+
+    foreach (var version in versions.OrderByDescending(v => v.VersionNumber))
+    {
+        var versionPanel = new Panel
+        {
+            Location = new Point(10, yPos),
+            Size = new Size(850, 80),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = version.IsCurrent ? Color.LightYellow : Color.White
+        };
+
+        var versionHeader = new Label
+        {
+            Text = $"{version.DisplayName} {(version.IsCurrent ? "(CURRENT)" : "")}",
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Location = new Point(10, 10),
+            Size = new Size(400, 20)
+        };
+        versionPanel.Controls.Add(versionHeader);
+
+        var createdLabel = new Label
+        {
+            Text = $"Created: {version.CreatedDisplay} by {version.CreatedBy}",
+            Location = new Point(10, 35),
+            Size = new Size(400, 20)
+        };
+        versionPanel.Controls.Add(createdLabel);
+
+        var notesLabel = new Label
+        {
+            Text = $"Notes: {version.VersionNotes}",
+            Location = new Point(10, 55),
+            Size = new Size(800, 20),
+            ForeColor = Color.DarkGray
+        };
+        versionPanel.Controls.Add(notesLabel);
+
+        panel.Controls.Add(versionPanel);
+        yPos += 90;
+    }
+
+    tab.Controls.Add(panel);
+}
+
+// ADD THIS CLASS at the end of the RecipeVersionHistoryForm class, just before the final closing brace
+private class MetricComparison
+{
+    public string Name { get; set; }
+    public decimal Current { get; set; }
+    public decimal Compare { get; set; }
+}
+
+        private void CreateDetailedTab(TabPage tab, List<RecipeVersion> versions)
+        {
+            var textBox = new TextBox
             {
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Both,
                 Dock = DockStyle.Fill,
-                Font = new Font("Consolas", 9)
+                Font = new Font("Consolas", 9),
+                BackColor = Color.White
             };
 
-            string comparison = "VERSION COMPARISON\n";
-            comparison += "===================\n\n";
+            var comparison = new System.Text.StringBuilder();
+            comparison.AppendLine("DETAILED VERSION COMPARISON");
+            comparison.AppendLine("============================");
+            comparison.AppendLine();
 
             foreach (var version in versions.OrderBy(v => v.VersionNumber))
             {
                 var data = version.GetVersionData();
                 if (data != null)
                 {
-                    comparison += $"{version.DisplayName}:\n";
-                    comparison += $"  Total Cost: {AppSettings.CurrencySymbol}{data.TotalCost:F2}\n";
-                    comparison += $"  Cost/Serving: {AppSettings.CurrencySymbol}{data.CostPerServing:F2}\n";
-                    comparison += $"  Ingredients: {data.Ingredients.Count}\n";
-                    comparison += $"  Notes: {version.VersionNotes}\n\n";
+                    comparison.AppendLine($"{version.DisplayName} {(version.IsCurrent ? "(CURRENT)" : "")}");
+                    comparison.AppendLine(new string('-', 50));
+                    comparison.AppendLine($"Created: {version.CreatedDisplay} by {version.CreatedBy}");
+                    comparison.AppendLine($"Notes: {version.VersionNotes}");
+                    comparison.AppendLine();
+                    comparison.AppendLine($"Batch Yield: {data.Recipe.BatchYield}");
+                    comparison.AppendLine($"Target Food Cost: {data.Recipe.TargetFoodCostPercentage:P0}");
+                    comparison.AppendLine($"Total Cost: {AppSettings.CurrencySymbol}{data.TotalCost:F2}");
+                    comparison.AppendLine($"Cost per Serving: {AppSettings.CurrencySymbol}{data.CostPerServing:F2}");
+                    comparison.AppendLine($"Ingredients: {data.Ingredients.Count}");
+                    comparison.AppendLine();
+                    
+                    comparison.AppendLine("INGREDIENTS:");
+                    comparison.AppendLine("------------");
+                    foreach (var ingredient in data.Ingredients)
+                    {
+                        comparison.AppendLine($"  {ingredient.Quantity} {ingredient.Unit} {ingredient.IngredientName}");
+                        comparison.AppendLine($"    = {AppSettings.CurrencySymbol}{ingredient.LineCost:F2}");
+                    }
+                    comparison.AppendLine();
+                    comparison.AppendLine();
                 }
             }
 
-            comparisonText.Text = comparison;
-            compareForm.Controls.Add(comparisonText);
-
-            compareForm.ShowDialog();
+            textBox.Text = comparison.ToString();
+            tab.Controls.Add(textBox);
         }
+
+        private void CreateIngredientsTab(TabPage tab, List<RecipeVersion> versions)
+        {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Padding = new Padding(10)
+            };
+
+            int yPos = 10;
+            var headerLabel = new Label
+            {
+                Text = "INGREDIENTS COMPARISON",
+                Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                Location = new Point(10, yPos),
+                Size = new Size(850, 25),
+                ForeColor = Color.Navy
+            };
+            panel.Controls.Add(headerLabel);
+            yPos += 40;
+
+            // Get all unique ingredients across all versions
+            var allIngredients = new Dictionary<string, List<decimal>>();
+            
+            foreach (var version in versions.OrderByDescending(v => v.VersionNumber))
+            {
+                var data = version.GetVersionData();
+                if (data != null)
+                {
+                    foreach (var ingredient in data.Ingredients)
+                    {
+                        var key = $"{ingredient.IngredientName} ({ingredient.Unit})";
+                        if (!allIngredients.ContainsKey(key))
+                        {
+                            allIngredients[key] = new List<decimal>();
+                        }
+                        // Pad the list to align with version count
+                        while (allIngredients[key].Count < versions.IndexOf(version))
+                        {
+                            allIngredients[key].Add(0);
+                        }
+                        allIngredients[key].Add(ingredient.Quantity);
+                    }
+                }
+            }
+
+            // Create table headers
+            var versionHeaders = versions.Select(v => v.DisplayName).ToArray();
+            
+            // Header row
+            var headerPanel = new Panel
+            {
+                Location = new Point(10, yPos),
+                Size = new Size(850, 30),
+                BackColor = Color.LightGray
+            };
+
+            var ingredientHeader = new Label
+            {
+                Text = "Ingredient",
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Location = new Point(10, 5),
+                Size = new Size(300, 20)
+            };
+            headerPanel.Controls.Add(ingredientHeader);
+
+            for (int i = 0; i < versionHeaders.Length; i++)
+            {
+                var versionHeader = new Label
+                {
+                    Text = $"Ver {i+1}",
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                    Location = new Point(320 + i * 120, 5),
+                    Size = new Size(110, 20),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                headerPanel.Controls.Add(versionHeader);
+            }
+
+            panel.Controls.Add(headerPanel);
+            yPos += 35;
+
+            // Data rows
+            foreach (var ingredient in allIngredients)
+            {
+                var rowPanel = new Panel
+                {
+                    Location = new Point(10, yPos),
+                    Size = new Size(850, 25),
+                    BackColor = yPos % 2 == 0 ? Color.White : Color.Lavender
+                };
+
+                var nameLabel = new Label
+                {
+                    Text = ingredient.Key,
+                    Location = new Point(10, 5),
+                    Size = new Size(300, 20),
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+                rowPanel.Controls.Add(nameLabel);
+
+                for (int i = 0; i < versionHeaders.Length; i++)
+                {
+                    var quantity = i < ingredient.Value.Count ? ingredient.Value[i] : 0;
+                    var quantityLabel = new Label
+                    {
+                        Text = quantity > 0 ? quantity.ToString("F2") : "-",
+                        Location = new Point(320 + i * 120, 5),
+                        Size = new Size(110, 20),
+                        TextAlign = ContentAlignment.MiddleCenter,
+                        ForeColor = quantity == 0 ? Color.Gray : Color.Black
+                    };
+                    rowPanel.Controls.Add(quantityLabel);
+                }
+
+                panel.Controls.Add(rowPanel);
+                yPos += 30;
+            }
+
+            tab.Controls.Add(panel);
+        }
+
+private string FormatMetricValue(string metricName, decimal value)
+{
+    if (metricName.Contains("Cost"))
+    {
+        return $"{AppSettings.CurrencySymbol}{value:F2}";
+    }
+    else if (metricName.Contains("Percentage"))
+    {
+        return $"{value:P0}";
+    }
+    else if (metricName.Contains("Number of Ingredients") || metricName.Contains("Batch Yield"))
+    {
+        return $"{value:F0}";
+    }
+    return value.ToString("F2");
+}
     }
 }
-// [file content end]
