@@ -13,6 +13,9 @@ namespace CostChef
         public string Category { get; set; }
         public int? SupplierId { get; set; }
         public string SupplierName { get; set; }
+        
+        // NEW: Simple yield percentage (default 100%)
+        public decimal YieldPercentage { get; set; } = 1.0m;
     }
 
     public class Recipe
@@ -42,7 +45,13 @@ namespace CostChef
         public string Unit { get; set; }
         public decimal UnitPrice { get; set; }
         public string Supplier { get; set; }
-        public decimal LineCost => UnitPrice * Quantity;
+        public decimal YieldPercentage { get; set; } = 1.0m; // NEW: Store yield at time of recipe creation
+        
+        // UPDATED: Simple yield-adjusted cost
+        public decimal LineCost => UnitPrice * Quantity / (YieldPercentage > 0 ? YieldPercentage : 1.0m);
+        
+        // Keep original for reference if needed
+        public decimal BaseLineCost => UnitPrice * Quantity;
     }
 
     public class Supplier

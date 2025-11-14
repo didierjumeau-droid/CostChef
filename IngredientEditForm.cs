@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using System.Linq;
 using System.Collections.Generic;
+using System.Drawing;
 
 namespace CostChef
 {
@@ -20,6 +21,9 @@ namespace CostChef
         private TextBox txtPurchaseQuantity;
         private ComboBox cmbPurchaseUnit;
         private Button btnCalculate;
+
+        // NEW: Yield percentage field
+        private TextBox txtYield;
 
         private Ingredient currentIngredient;
         private bool isEditMode;
@@ -47,148 +51,177 @@ namespace CostChef
             LoadIngredientData();
         }
 
-     private void InitializeComponent()
-{
-    this.txtName = new TextBox();
-    this.cmbUnit = new ComboBox();
-    this.txtUnitPrice = new TextBox();
-    this.cmbCategory = new ComboBox();
-    this.cmbSupplier = new ComboBox();
-    this.btnSave = new Button();
-    this.btnCancel = new Button();
+        private void InitializeComponent()
+        {
+            this.txtName = new TextBox();
+            this.cmbUnit = new ComboBox();
+            this.txtUnitPrice = new TextBox();
+            this.cmbCategory = new ComboBox();
+            this.cmbSupplier = new ComboBox();
+            this.btnSave = new Button();
+            this.btnCancel = new Button();
 
-    // New purchase calculation fields
-    this.txtPurchasePrice = new TextBox();
-    this.txtPurchaseQuantity = new TextBox();
-    this.cmbPurchaseUnit = new ComboBox();
-    this.btnCalculate = new Button();
+            // New purchase calculation fields
+            this.txtPurchasePrice = new TextBox();
+            this.txtPurchaseQuantity = new TextBox();
+            this.cmbPurchaseUnit = new ComboBox();
+            this.btnCalculate = new Button();
 
-    // Form - increased height to accommodate new fields
-    this.SuspendLayout();
-    this.ClientSize = new System.Drawing.Size(400, 400);
-    this.Text = isEditMode ? "Edit Ingredient" : "Add New Ingredient";
-    this.StartPosition = FormStartPosition.CenterParent;
-    this.FormBorderStyle = FormBorderStyle.FixedDialog;
-    this.MaximizeBox = false;
+            // NEW: Yield percentage field
+            this.txtYield = new TextBox();
 
-    int yPos = 20;
+            // Form - increased height to accommodate new fields
+            this.SuspendLayout();
+            this.ClientSize = new System.Drawing.Size(400, 430);
+            this.Text = isEditMode ? "Edit Ingredient" : "Add New Ingredient";
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
 
-    // Name
-    var lblName = new Label { Text = "Name:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.txtName.Location = new System.Drawing.Point(120, yPos - 3);
-    this.txtName.Size = new System.Drawing.Size(250, 20);
-    this.txtName.MaxLength = 100;
+            int yPos = 20;
 
-    yPos += 30;
+            // Name
+            var lblName = new Label { Text = "Name:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.txtName.Location = new System.Drawing.Point(120, yPos - 3);
+            this.txtName.Size = new System.Drawing.Size(250, 20);
+            this.txtName.MaxLength = 100;
 
-    // Unit
-    var lblUnit = new Label { Text = "Unit:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.cmbUnit.Location = new System.Drawing.Point(120, yPos - 3);
-    this.cmbUnit.Size = new System.Drawing.Size(250, 20);
-    this.cmbUnit.DropDownStyle = ComboBoxStyle.DropDownList;
+            yPos += 30;
 
-    yPos += 30;
+            // Unit
+            var lblUnit = new Label { Text = "Unit:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.cmbUnit.Location = new System.Drawing.Point(120, yPos - 3);
+            this.cmbUnit.Size = new System.Drawing.Size(250, 20);
+            this.cmbUnit.DropDownStyle = ComboBoxStyle.DropDownList;
 
-    // Unit Price
-    var lblUnitPrice = new Label { Text = "Unit Price:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.txtUnitPrice.Location = new System.Drawing.Point(120, yPos - 3);
-    this.txtUnitPrice.Size = new System.Drawing.Size(250, 20);
-    this.txtUnitPrice.PlaceholderText = "0.0000";
+            yPos += 30;
 
-    yPos += 30;
+            // Unit Price
+            var lblUnitPrice = new Label { Text = "Unit Price:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.txtUnitPrice.Location = new System.Drawing.Point(120, yPos - 3);
+            this.txtUnitPrice.Size = new System.Drawing.Size(250, 20);
+            this.txtUnitPrice.PlaceholderText = "0.0000";
 
-    // Category
-    var lblCategory = new Label { Text = "Category:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.cmbCategory.Location = new System.Drawing.Point(120, yPos - 3);
-    this.cmbCategory.Size = new System.Drawing.Size(250, 20);
-    this.cmbCategory.DropDownStyle = ComboBoxStyle.DropDown;
+            yPos += 30;
 
-    yPos += 30;
+            // Category
+            var lblCategory = new Label { Text = "Category:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.cmbCategory.Location = new System.Drawing.Point(120, yPos - 3);
+            this.cmbCategory.Size = new System.Drawing.Size(250, 20);
+            this.cmbCategory.DropDownStyle = ComboBoxStyle.DropDown;
 
-    // Supplier
-    var lblSupplier = new Label { Text = "Supplier:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.cmbSupplier.Location = new System.Drawing.Point(120, yPos - 3);
-    this.cmbSupplier.Size = new System.Drawing.Size(250, 20);
-    this.cmbSupplier.DropDownStyle = ComboBoxStyle.DropDownList;
+            yPos += 30;
 
-    yPos += 40;
+            // Supplier
+            var lblSupplier = new Label { Text = "Supplier:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.cmbSupplier.Location = new System.Drawing.Point(120, yPos - 3);
+            this.cmbSupplier.Size = new System.Drawing.Size(250, 20);
+            this.cmbSupplier.DropDownStyle = ComboBoxStyle.DropDownList;
 
-    // Purchase Calculation Section
-    var lblPurchaseSection = new Label 
-    { 
-        Text = "Purchase Calculation (from receipt):", 
-        Location = new System.Drawing.Point(20, yPos), 
-        AutoSize = true,
-        Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold)
-    };
-    this.Controls.Add(lblPurchaseSection);
+            yPos += 30;
 
-    yPos += 25;
+            // NEW: Yield Percentage
+            var lblYield = new Label { Text = "Yield %:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.txtYield.Location = new System.Drawing.Point(120, yPos - 3);
+            this.txtYield.Size = new System.Drawing.Size(100, 20);
+            this.txtYield.Text = "100";
+            this.txtYield.PlaceholderText = "100";
+            this.txtYield.TextChanged += (s, e) => ValidateYieldPercentage();
 
-    // Purchase Price
-    var lblPurchasePrice = new Label { Text = "Purchase Price:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.txtPurchasePrice.Location = new System.Drawing.Point(120, yPos - 3);
-    this.txtPurchasePrice.Size = new System.Drawing.Size(100, 20);
-    this.txtPurchasePrice.PlaceholderText = "0.00";
+            yPos += 40;
 
-    yPos += 30;
+            // Purchase Calculation Section
+            var lblPurchaseSection = new Label 
+            { 
+                Text = "Purchase Calculation (from receipt):", 
+                Location = new System.Drawing.Point(20, yPos), 
+                AutoSize = true,
+                Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold)
+            };
+            this.Controls.Add(lblPurchaseSection);
 
-    // Purchase Quantity - FIXED: Smaller font for better spacing
-    var lblPurchaseQuantity = new Label 
-    { 
-        Text = "Purchase Quantity:", 
-        Location = new System.Drawing.Point(20, yPos), 
-        AutoSize = true,
-        Font = new System.Drawing.Font(this.Font.FontFamily, this.Font.Size - 1) // FIXED: Proper font constructor
-    };
-    this.txtPurchaseQuantity.Location = new System.Drawing.Point(120, yPos - 3);
-    this.txtPurchaseQuantity.Size = new System.Drawing.Size(100, 20);
-    this.txtPurchaseQuantity.PlaceholderText = "0";
+            yPos += 25;
 
-    yPos += 30;
+            // Purchase Price
+            var lblPurchasePrice = new Label { Text = "Purchase Price:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.txtPurchasePrice.Location = new System.Drawing.Point(120, yPos - 3);
+            this.txtPurchasePrice.Size = new System.Drawing.Size(100, 20);
+            this.txtPurchasePrice.PlaceholderText = "0.00";
 
-    // Purchase Unit
-    var lblPurchaseUnit = new Label { Text = "Purchase Unit:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
-    this.cmbPurchaseUnit.Location = new System.Drawing.Point(120, yPos - 3);
-    this.cmbPurchaseUnit.Size = new System.Drawing.Size(100, 20);
-    this.cmbPurchaseUnit.DropDownStyle = ComboBoxStyle.DropDownList;
+            yPos += 30;
 
-    yPos += 30;
+            // Purchase Quantity
+            var lblPurchaseQuantity = new Label 
+            { 
+                Text = "Purchase Quantity:", 
+                Location = new System.Drawing.Point(20, yPos), 
+                AutoSize = true,
+                Font = new System.Drawing.Font(this.Font.FontFamily, this.Font.Size - 1)
+            };
+            this.txtPurchaseQuantity.Location = new System.Drawing.Point(120, yPos - 3);
+            this.txtPurchaseQuantity.Size = new System.Drawing.Size(100, 20);
+            this.txtPurchaseQuantity.PlaceholderText = "0";
 
-    // Calculate Button
-    this.btnCalculate.Text = "Calculate";
-    this.btnCalculate.Location = new System.Drawing.Point(120, yPos);
-    this.btnCalculate.Size = new System.Drawing.Size(80, 25);
-    this.btnCalculate.Click += (s, e) => CalculateUnitPrice();
+            yPos += 30;
 
-    yPos += 40;
+            // Purchase Unit
+            var lblPurchaseUnit = new Label { Text = "Purchase Unit:", Location = new System.Drawing.Point(20, yPos), AutoSize = true };
+            this.cmbPurchaseUnit.Location = new System.Drawing.Point(120, yPos - 3);
+            this.cmbPurchaseUnit.Size = new System.Drawing.Size(100, 20);
+            this.cmbPurchaseUnit.DropDownStyle = ComboBoxStyle.DropDownList;
 
-    // Buttons
-    this.btnSave.Text = "Save";
-    this.btnSave.Location = new System.Drawing.Point(120, yPos);
-    this.btnSave.Size = new System.Drawing.Size(80, 30);
-    this.btnSave.Click += (s, e) => SaveIngredient();
+            yPos += 30;
 
-    this.btnCancel.Text = "Cancel";
-    this.btnCancel.Location = new System.Drawing.Point(210, yPos);
-    this.btnCancel.Size = new System.Drawing.Size(80, 30);
-    this.btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
+            // Calculate Button
+            this.btnCalculate.Text = "Calculate";
+            this.btnCalculate.Location = new System.Drawing.Point(120, yPos);
+            this.btnCalculate.Size = new System.Drawing.Size(80, 25);
+            this.btnCalculate.Click += (s, e) => CalculateUnitPrice();
 
-    this.Controls.AddRange(new Control[] {
-        lblName, txtName, lblUnit, cmbUnit, lblUnitPrice, txtUnitPrice,
-        lblCategory, cmbCategory, lblSupplier, cmbSupplier,
-        lblPurchasePrice, txtPurchasePrice, 
-        lblPurchaseQuantity, txtPurchaseQuantity,
-        lblPurchaseUnit, cmbPurchaseUnit,
-        btnCalculate, btnSave, btnCancel
-    });
+            yPos += 40;
 
-    this.AcceptButton = btnSave;
-    this.CancelButton = btnCancel;
+            // Buttons
+            this.btnSave.Text = "Save";
+            this.btnSave.Location = new System.Drawing.Point(120, yPos);
+            this.btnSave.Size = new System.Drawing.Size(80, 30);
+            this.btnSave.Click += (s, e) => SaveIngredient();
 
-    this.ResumeLayout(false);
-    this.PerformLayout();
-}
+            this.btnCancel.Text = "Cancel";
+            this.btnCancel.Location = new System.Drawing.Point(210, yPos);
+            this.btnCancel.Size = new System.Drawing.Size(80, 30);
+            this.btnCancel.Click += (s, e) => { this.DialogResult = DialogResult.Cancel; this.Close(); };
+
+            this.Controls.AddRange(new Control[] {
+                lblName, txtName, lblUnit, cmbUnit, lblUnitPrice, txtUnitPrice,
+                lblCategory, cmbCategory, lblSupplier, cmbSupplier,
+                lblYield, txtYield, // NEW: Yield field
+                lblPurchasePrice, txtPurchasePrice, 
+                lblPurchaseQuantity, txtPurchaseQuantity,
+                lblPurchaseUnit, cmbPurchaseUnit,
+                btnCalculate, btnSave, btnCancel
+            });
+
+            this.AcceptButton = btnSave;
+            this.CancelButton = btnCancel;
+
+            this.ResumeLayout(false);
+            this.PerformLayout();
+        }
+
+        private void ValidateYieldPercentage()
+        {
+            if (decimal.TryParse(txtYield.Text, out decimal yieldPercent))
+            {
+                if (yieldPercent <= 0 || yieldPercent > 200)
+                {
+                    txtYield.ForeColor = Color.Red;
+                }
+                else
+                {
+                    txtYield.ForeColor = SystemColors.WindowText;
+                }
+            }
+        }
 
         private void LoadPurchaseUnits()
         {
@@ -343,6 +376,7 @@ namespace CostChef
                 txtName.Text = currentIngredient.Name;
                 txtUnitPrice.Text = currentIngredient.UnitPrice.ToString("F4");
                 cmbCategory.Text = currentIngredient.Category;
+                txtYield.Text = (currentIngredient.YieldPercentage * 100).ToString("0"); // NEW: Load yield percentage
 
                 // Select unit
                 if (!string.IsNullOrEmpty(currentIngredient.Unit))
@@ -509,12 +543,23 @@ namespace CostChef
                 return;
             }
 
+            // NEW: Validate yield percentage
+            if (!decimal.TryParse(txtYield.Text, out decimal yieldPercent) || yieldPercent <= 0 || yieldPercent > 200)
+            {
+                MessageBox.Show("Please enter a valid yield percentage between 1 and 200.", "Validation Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                txtYield.Focus();
+                txtYield.SelectAll();
+                return;
+            }
+
             try
             {
                 currentIngredient.Name = txtName.Text.Trim();
                 currentIngredient.Unit = cmbUnit.SelectedItem.ToString();
                 currentIngredient.UnitPrice = unitPrice;
                 currentIngredient.Category = cmbCategory.Text.Trim();
+                currentIngredient.YieldPercentage = yieldPercent / 100m; // NEW: Convert to decimal (85% → 0.85)
 
                 // Handle supplier
                 if (cmbSupplier.SelectedItem is Supplier selectedSupplier)
