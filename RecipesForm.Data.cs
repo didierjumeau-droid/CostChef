@@ -1,330 +1,314 @@
 using System;
-using System.Windows.Forms;
 using System.Linq;
+using System.Windows.Forms;
+using System.Collections.Generic;
 
 namespace CostChef
 {
     public partial class RecipesForm : Form
     {
+        // ===========================================================
+        // MAIN SAVE ENTRY POINT (btnSaveRecipe → SaveRecipe)
+        // ===========================================================
         private void SaveRecipe()
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(txtRecipeName.Text))
+                string name = txtRecipeName.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(name))
                 {
-                    MessageBox.Show("Please enter a recipe name.", "Validation Error", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    txtRecipeName.Focus();
+                    MessageBox.Show("Please enter a recipe name.", "Missing Name",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
-                if (currentIngredients.Count == 0)
+                if (currentIngredients == null)
+                    currentIngredients = new List<RecipeIngredient>();
+
+                bool editingExisting = currentRecipe != null && currentRecipe.Id > 0;
+
+                // =======================================================
+                // CASE 1: EXISTING RECIPE (option 1)
+                // =======================================================
+                if (editingExisting)
                 {
-                    MessageBox.Show("Please add at least one ingredient to the recipe.", "Validation Error", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                // === STRICT DUPLICATE CHECK ===
-                string newRecipeName = txtRecipeName.Text.Trim();
-                
-                // Check for duplicates (exclude current recipe from the check)
-                var duplicateRecipe = allRecipes.FirstOrDefault(r => 
-                    r.Name.Equals(newRecipeName, StringComparison.OrdinalIgnoreCase) && 
-                    r.Id != currentRecipe.Id);
-                
-                if (duplicateRecipe != null)
-                {
-                    MessageBox.Show($"A recipe named '{newRecipeName}' already exists.\n\nPlease choose a different name.", 
-                        "Duplicate Recipe Name", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    txtRecipeName.Focus();
-                    txtRecipeName.SelectAll();
-                    
-                    // AUTOMATICALLY OPEN SAVE AS DIALOG FOR DUPLICATES
-                    string newName = ShowSaveAsDialog(newRecipeName);
-                    if (!string.IsNullOrEmpty(newName))
-                    {
-                        // Check if the new name is also a duplicate
-                        var newNameDuplicate = allRecipes.Any(r => 
-                            r.Name.Equals(newName, StringComparison.OrdinalIgnoreCase));
-                        
-                        if (newNameDuplicate)
-                        {
-                            MessageBox.Show($"A recipe named '{newName}' already exists.\n\nPlease choose a different name.", 
-                                "Duplicate Recipe Name", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return; // Let user try again with a different name
-                        }
-                        
-                        // Use the new name and continue with normal save flow
-                        currentRecipe.Name = newName;
-                        txtRecipeName.Text = currentRecipe.Name;
-                        
-                        // Force "Save As" behavior - treat as new recipe
-                        currentRecipe.Id = 0;
-                    }
-                    else
-                    {
-                        return; // User cancelled the Save As dialog
-                    }
-                }
-
-                // Update current recipe with form data
-                currentRecipe.Name = txtRecipeName.Text.Trim();
-                currentRecipe.Category = cmbCategory.Text.Trim();
-                UpdateRecipeTags();
-
-                // Update batch yield and food cost from form
-                if (int.TryParse(txtBatchYield.Text, out int batchYield))
-                    currentRecipe.BatchYield = batchYield;
-
-                if (cmbFoodCost.SelectedItem != null)
-                {
-                    var percent = cmbFoodCost.SelectedItem.ToString().Replace("%", "");
-                    if (decimal.TryParse(percent, out decimal foodCost))
-                        currentRecipe.TargetFoodCostPercentage = foodCost / 100m;
-                }
-
-                bool shouldSave = true;
-                bool isNewRecipe = currentRecipe.Id == 0;
-
-                // Only show save options if not already in "Save As" mode from duplicate handling
-                if (currentRecipe.Id != 0)
-                {
-                    // Show save options dialog
-                    var saveResult = MessageBox.Show(
-                        $"Recipe: {currentRecipe.Name}\n\n" +
-                        "How would you like to save?\n\n" +
-                        "• Yes: Save/Update this recipe\n" +
-                        "• No: Save as a copy with different name\n" +
-                        "• Cancel: Go back to editing",
+                    var result = MessageBox.Show(
+                        "You are modifying an existing recipe.\n\n" +
+                        "YES    = Overwrite the current recipe\n" +
+                        "NO     = Save a new copy under a different name\n" +
+                        "CANCEL = Return without saving\n\n" +
+                        $"Do you want to save changes to '{currentRecipe.Name}'?",
                         "Save Recipe",
-                        MessageBoxButtons.YesNoCancel, 
+                        MessageBoxButtons.YesNoCancel,
                         MessageBoxIcon.Question);
 
-                    if (saveResult == DialogResult.Yes)
-                    {
-                        // Save/Update the recipe
-                        isNewRecipe = false;
-                    }
-                    else if (saveResult == DialogResult.No)
-                    {
-                        // Save as copy - create new recipe (clone)
-                        // Use a loop to handle duplicate names and keep showing the Save As dialog
-                        bool validNameEntered = false;
-                        
-                        while (!validNameEntered)
-                        {
-                            string newName = ShowSaveAsDialog(currentRecipe.Name);
-                            if (string.IsNullOrEmpty(newName))
-                            {
-                                shouldSave = false; // User cancelled
-                                break;
-                            }
-                            
-                            // Check if the new name is also a duplicate
-                            var newNameDuplicate = allRecipes.Any(r => 
-                                r.Name.Equals(newName, StringComparison.OrdinalIgnoreCase));
-                            
-                            if (newNameDuplicate)
-                            {
-                                MessageBox.Show($"A recipe named '{newName}' already exists.\n\nPlease choose a different name.", 
-                                    "Duplicate Recipe Name", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                // Continue the loop to show the Save As dialog again
-                                continue;
-                            }
-                            
-                            // Valid non-duplicate name entered
-                            currentRecipe.Name = newName;
-                            txtRecipeName.Text = currentRecipe.Name;
-                            currentRecipe.Id = 0;
-                            isNewRecipe = true;
-                            validNameEntered = true;
-                        }
-                    }
-                    else
-                    {
-                        shouldSave = false; // User cancelled
-                    }
-                }
+                    if (result == DialogResult.Cancel)
+                        return;
 
-                if (shouldSave)
-                {
-                    if (isNewRecipe)
+                    if (result == DialogResult.Yes)
                     {
-                        // Insert new recipe
-                        DatabaseContext.InsertRecipe(currentRecipe);
-                        
-                        // Get the newly created recipe ID
-                        var allRecipesAfterInsert = DatabaseContext.GetAllRecipes();
-                        var newRecipe = allRecipesAfterInsert
-                            .FirstOrDefault(r => r.Name.Equals(currentRecipe.Name, StringComparison.OrdinalIgnoreCase));
-                        
-                        if (newRecipe != null)
-                        {
-                            currentRecipe.Id = newRecipe.Id;
-                            
-                            // Create initial version for new recipes
-                            CreateInitialVersion();
-                        }
-                    }
-                    else
-                    {
-                        // Update existing recipe
+                        // Overwrite existing recipe
+                        ApplyFormValuesToCurrentRecipe();
                         DatabaseContext.UpdateRecipe(currentRecipe);
-                        
-                        // Create version for recipe updates
-                        CreateVersionForChange("Recipe updated");
+                        SaveRecipeIngredients(currentRecipe.Id);
+
+                        LoadExistingRecipes();
+                        SelectRecipeInComboById(currentRecipe.Id);
+
+                        MessageBox.Show("Recipe saved.", "Saved",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
                     }
 
-                    // Save ingredients
-                    SaveRecipeIngredients();
-
-                    string message = isNewRecipe ? 
-                        $"New recipe '{currentRecipe.Name}' saved successfully!" : 
-                        $"Recipe '{currentRecipe.Name}' updated successfully!";
-                        
-                    MessageBox.Show(message, "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-                    // Refresh the recipes list and trigger update event
-                    LoadExistingRecipes();
-                    RecipesUpdated?.Invoke();
-                    UpdateRecipeCountDisplay();
-                    btnVersionHistory.Enabled = true; // Enable version history button after saving
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving recipe: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void SaveRecipeIngredients()
-        {
-            try
-            {
-                if (currentRecipe.Id <= 0)
-                {
-                    throw new InvalidOperationException("Recipe ID is not valid. Cannot save ingredients.");
-                }
-
-                // Delete ALL existing ingredients for this recipe first
-                var existingIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
-                foreach (var existing in existingIngredients)
-                {
-                    DatabaseContext.DeleteRecipeIngredient(existing.Id);
-                }
-
-                // Now save all current ingredients with the correct RecipeId
-                foreach (var recipeIngredient in currentIngredients)
-                {
-                    // Use the DatabaseContext method to add the ingredient
-                    DatabaseContext.AddRecipeIngredient(new RecipeIngredient
+                    if (result == DialogResult.No)
                     {
-                        RecipeId = currentRecipe.Id,
-                        IngredientId = recipeIngredient.IngredientId,
-                        Quantity = recipeIngredient.Quantity
-                    });
-                }
+                        // Save As – propose "<name> - Copy" and let user edit
+                        string newName = ShowSaveAsDialog(currentRecipe.Name);
+                        if (newName == null)
+                            return; // user cancelled
 
-                // Refresh the current ingredients from database to get proper IDs
-                currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error saving recipe ingredients: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                throw;
-            }
-        }
+                        var newRecipe = CreateRecipeFromForm(newName);
+                        int newId = DatabaseContext.InsertRecipe(newRecipe);
+                        SaveRecipeIngredients(newId);
 
-        private void DeleteRecipe()
-        {
-            try
-            {
-                if (currentRecipe.Id == 0)
-                {
-                    MessageBox.Show("No recipe loaded to delete.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        newRecipe.Id = newId;
+                        currentRecipe = newRecipe;
+
+                        LoadExistingRecipes();
+                        SelectRecipeInComboById(newId);
+
+                        MessageBox.Show($"Saved as '{newName}'.", "Saved As",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
                     return;
                 }
 
-                var result = MessageBox.Show($"Are you sure you want to delete recipe '{currentRecipe.Name}'? This action cannot be undone.", 
-                    "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                // =======================================================
+                // CASE 2: NO CURRENT RECIPE (fallback)
+                // Should not happen in Option 1, but kept safe.
+                // =======================================================
+                var recipeToCreate = CreateRecipeFromForm(name);
+                int createdId = DatabaseContext.InsertRecipe(recipeToCreate);
+                SaveRecipeIngredients(createdId);
 
-                if (result == DialogResult.Yes)
-                {
-                    DatabaseContext.DeleteRecipe(currentRecipe.Id);
-                    MessageBox.Show("Recipe deleted successfully!", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    
-                    // Refresh and reset form
-                    LoadExistingRecipes();
-                    InitializeNewRecipe();
-                    RecipesUpdated?.Invoke();
-                }
+                recipeToCreate.Id = createdId;
+                currentRecipe = recipeToCreate;
+
+                LoadExistingRecipes();
+                SelectRecipeInComboById(createdId);
+
+                MessageBox.Show("Recipe created.", "Saved",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error deleting recipe: {ex.Message}", "Error", 
+                MessageBox.Show($"Error saving recipe:\n{ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
+        // ===========================================================
+        // APPLY FORM DATA TO EXISTING CURRENT RECIPE
+        // ===========================================================
+        private void ApplyFormValuesToCurrentRecipe()
+        {
+            if (currentRecipe == null)
+                currentRecipe = new Recipe();
+
+            currentRecipe.Name = txtRecipeName.Text?.Trim() ?? string.Empty;
+            currentRecipe.Category = cmbCategory.Text?.Trim() ?? string.Empty;
+
+            // Tags
+            var rawTags = txtTags.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrEmpty(rawTags))
+            {
+                var tags = rawTags
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim())
+                    .Where(t => t.Length > 0);
+                currentRecipe.Tags = string.Join(",", tags);
+            }
+            else
+            {
+                currentRecipe.Tags = string.Empty;
+            }
+
+            // Batch yield
+            if (!int.TryParse(txtBatchYield.Text, out int batchYield) || batchYield <= 0)
+                batchYield = 1;
+            currentRecipe.BatchYield = batchYield;
+
+            // Target food cost %
+            decimal targetFoodCost = 0.30m; // default 30%
+            if (cmbFoodCost.SelectedItem is string fc)
+            {
+                var numericPart = fc.Replace("%", "").Trim();
+                if (decimal.TryParse(numericPart, out var percentValue) && percentValue > 0)
+                    targetFoodCost = percentValue / 100m;
+            }
+            currentRecipe.TargetFoodCostPercentage = targetFoodCost;
+        }
+
+        // ===========================================================
+        // BUILD A NEW RECIPE FROM FORM VALUES (USED FOR "SAVE AS")
+        // ===========================================================
+        private Recipe CreateRecipeFromForm(string recipeName)
+        {
+            var recipe = new Recipe
+            {
+                Name = recipeName?.Trim() ?? string.Empty,
+                Description = string.Empty,
+                Category = cmbCategory.Text?.Trim() ?? string.Empty,
+                Tags = string.Empty,
+                BatchYield = 1,
+                TargetFoodCostPercentage = 0.30m,
+                SalesPrice = 0m
+            };
+
+            // Tags
+            var rawTags = txtTags.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrEmpty(rawTags))
+            {
+                var tags = rawTags
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Trim())
+                    .Where(t => t.Length > 0);
+                recipe.Tags = string.Join(",", tags);
+            }
+
+            // Batch yield
+            if (int.TryParse(txtBatchYield.Text, out int batchYield) && batchYield > 0)
+                recipe.BatchYield = batchYield;
+
+            // Target food cost %
+            decimal targetFoodCost = 0.30m;
+            if (cmbFoodCost.SelectedItem is string fc)
+            {
+                var numericPart = fc.Replace("%", "").Trim();
+                if (decimal.TryParse(numericPart, out var percentValue) && percentValue > 0)
+                    targetFoodCost = percentValue / 100m;
+            }
+            recipe.TargetFoodCostPercentage = targetFoodCost;
+
+            return recipe;
+        }
+
+        // ===========================================================
+        // SAVE INGREDIENTS FOR THE GIVEN RECIPE ID
+        // ===========================================================
+        private void SaveRecipeIngredients(int recipeId)
+        {
+            if (currentIngredients == null)
+                currentIngredients = new List<RecipeIngredient>();
+
+            foreach (var ing in currentIngredients)
+                ing.RecipeId = recipeId;
+
+            DatabaseContext.UpdateRecipeIngredients(recipeId, currentIngredients);
+        }
+
+        // ===========================================================
+        // SELECT A RECIPE IN THE COMBO BY ID
+        // ===========================================================
+        private void SelectRecipeInComboById(int recipeId)
+        {
+            try
+            {
+                if (cmbExistingRecipes?.DataSource is IEnumerable<Recipe> ds)
+                {
+                    var list = ds.ToList();
+                    var match = list.FirstOrDefault(r => r.Id == recipeId);
+                    if (match != null)
+                    {
+                        cmbExistingRecipes.SelectedItem = match;
+                        return;
+                    }
+                }
+
+                if (allRecipes != null)
+                {
+                    var match = allRecipes.FirstOrDefault(r => r.Id == recipeId);
+                    if (match != null)
+                    {
+                        cmbExistingRecipes.SelectedItem = match;
+                    }
+                }
+            }
+            catch
+            {
+                // Non-critical
+            }
+        }
+
+        // ===========================================================
+        // INLINE "SAVE AS" DIALOG
+        // ===========================================================
         private string ShowSaveAsDialog(string currentName)
         {
             using (var form = new Form())
             {
-                form.Text = "Save Recipe As Copy";
-                form.Size = new System.Drawing.Size(400, 200);
+                form.Text = "Save Recipe As";
+                form.ClientSize = new System.Drawing.Size(400, 150);
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.FormBorderStyle = FormBorderStyle.FixedDialog;
                 form.MaximizeBox = false;
+                form.MinimizeBox = false;
+                form.ShowInTaskbar = false;
 
-                var lblPrompt = new Label();
-                lblPrompt.Location = new System.Drawing.Point(20, 20);
-                lblPrompt.Size = new System.Drawing.Size(350, 40);
-                lblPrompt.Text = "Enter a name for the recipe copy:";
-                
-                var txtNewName = new TextBox();
-                txtNewName.Location = new System.Drawing.Point(20, 60);
-                txtNewName.Size = new System.Drawing.Size(350, 20);
-                txtNewName.Text = currentName + " Copy";
+                var lblPrompt = new Label
+                {
+                    Text = "Enter the new name for the recipe:",
+                    Location = new System.Drawing.Point(12, 12),
+                    Size = new System.Drawing.Size(360, 20)
+                };
+
+                var txtNewName = new TextBox
+                {
+                    Location = new System.Drawing.Point(12, 40),
+                    Size = new System.Drawing.Size(366, 20),
+                    Text = (currentName ?? string.Empty) + " - Copy"
+                };
                 txtNewName.SelectAll();
-                
-                var btnOK = new Button();
-                btnOK.Location = new System.Drawing.Point(200, 100);
-                btnOK.Size = new System.Drawing.Size(80, 30);
-                btnOK.Text = "OK";
-                btnOK.DialogResult = DialogResult.OK;
-                
-                var btnCancel = new Button();
-                btnCancel.Location = new System.Drawing.Point(290, 100);
-                btnCancel.Size = new System.Drawing.Size(80, 30);
-                btnCancel.Text = "Cancel";
-                btnCancel.DialogResult = DialogResult.Cancel;
 
-                form.Controls.AddRange(new Control[] {
-                    lblPrompt, txtNewName, btnOK, btnCancel
-                });
+                var btnOK = new Button
+                {
+                    Location = new System.Drawing.Point(200, 100),
+                    Size = new System.Drawing.Size(80, 30),
+                    Text = "OK",
+                    DialogResult = DialogResult.OK
+                };
+
+                var btnCancel = new Button
+                {
+                    Location = new System.Drawing.Point(290, 100),
+                    Size = new System.Drawing.Size(80, 30),
+                    Text = "Cancel",
+                    DialogResult = DialogResult.Cancel
+                };
+
+                form.Controls.Add(lblPrompt);
+                form.Controls.Add(txtNewName);
+                form.Controls.Add(btnOK);
+                form.Controls.Add(btnCancel);
 
                 form.AcceptButton = btnOK;
                 form.CancelButton = btnCancel;
 
-                if (form.ShowDialog() == DialogResult.OK)
+                if (form.ShowDialog(this) == DialogResult.OK)
                 {
                     var newName = txtNewName.Text.Trim();
                     if (string.IsNullOrWhiteSpace(newName))
                     {
-                        MessageBox.Show("Please enter a valid recipe name.", "Validation Error", 
+                        MessageBox.Show("Please enter a valid recipe name.", "Validation Error",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return ShowSaveAsDialog(currentName);
                     }
                     return newName;
                 }
-                
-                return null; // User cancelled
+
+                return null; // user cancelled
             }
         }
     }

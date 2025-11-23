@@ -12,15 +12,16 @@ namespace CostChef
         private Button btnSettings;
         private Button btnSupplierManagement;
         private Button btnSupplierReports;
+        private Button btnPriceHistory;
+        private Button btnInventory;
         private Label lblTitle;
         private Label lblSubtitle;
-        private Button btnPriceHistory;
 
         public MainForm()
         {
             InitializeComponent();
-            
-            // Initialize database
+
+            // Initialize database on app startup
             DatabaseContext.InitializeDatabase();
         }
 
@@ -33,40 +34,43 @@ namespace CostChef
             this.btnSettings = new Button();
             this.btnSupplierManagement = new Button();
             this.btnSupplierReports = new Button();
+            this.btnPriceHistory = new Button();
+            this.btnInventory = new Button();
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
-            this.btnPriceHistory = new Button();
-            
+
             // Main Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(400, 500);
-            this.Text = "CostChef v2.0 - Simple Menu Costing";
+            this.ClientSize = new System.Drawing.Size(400, 550);
+            this.Text = "CostChef - Menu Costing & Inventory";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
-            
+
             // lblTitle
             this.lblTitle.AutoSize = true;
-            this.lblTitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 18F, System.Drawing.FontStyle.Bold);
-            this.lblTitle.Location = new System.Drawing.Point(120, 40);
-            this.lblTitle.Size = new System.Drawing.Size(160, 29);
-            this.lblTitle.Text = "CostChef v2.0";
+            this.lblTitle.Font = new System.Drawing.Font(
+                "Microsoft Sans Serif", 18F, System.Drawing.FontStyle.Bold);
+            this.lblTitle.Location = new System.Drawing.Point(80, 40);
+            this.lblTitle.Size = new System.Drawing.Size(240, 29);
+            this.lblTitle.Text = "CostChef V3.0";
             this.lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            
+
             // lblSubtitle
             this.lblSubtitle.AutoSize = true;
-            this.lblSubtitle.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F);
+            this.lblSubtitle.Font = new System.Drawing.Font(
+                "Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular);
             this.lblSubtitle.Location = new System.Drawing.Point(80, 80);
             this.lblSubtitle.Size = new System.Drawing.Size(240, 17);
             this.lblSubtitle.Text = "Simple, Affordable Menu Costing";
             this.lblSubtitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            
+
             // btnIngredients
             this.btnIngredients.Location = new System.Drawing.Point(80, 120);
             this.btnIngredients.Size = new System.Drawing.Size(240, 40);
             this.btnIngredients.Text = "📦 Manage Ingredients";
             this.btnIngredients.Click += new EventHandler(this.btnIngredients_Click);
-            
+
             // btnRecipes
             this.btnRecipes.Location = new System.Drawing.Point(80, 170);
             this.btnRecipes.Size = new System.Drawing.Size(240, 40);
@@ -82,7 +86,7 @@ namespace CostChef
             // btnImportExport
             this.btnImportExport.Location = new System.Drawing.Point(80, 270);
             this.btnImportExport.Size = new System.Drawing.Size(240, 40);
-            this.btnImportExport.Text = "📤 Import/Export Data";
+            this.btnImportExport.Text = "📤 Import / Export Data";
             this.btnImportExport.Click += new EventHandler(this.btnImportExport_Click);
 
             // btnSupplierReports
@@ -91,24 +95,34 @@ namespace CostChef
             this.btnSupplierReports.Text = "📊 Supplier Reports";
             this.btnSupplierReports.Click += new EventHandler(this.btnSupplierReports_Click);
 
-            // btnPriceHistory - Properly aligned
+            // btnPriceHistory
             this.btnPriceHistory.Location = new System.Drawing.Point(80, 370);
             this.btnPriceHistory.Size = new System.Drawing.Size(240, 40);
             this.btnPriceHistory.Text = "📈 Price History";
             this.btnPriceHistory.Click += new EventHandler(this.btnPriceHistory_Click);
-            
+
+            // ✅ NEW: Inventory button
+            this.btnInventory.Location = new System.Drawing.Point(80, 420);
+            this.btnInventory.Size = new System.Drawing.Size(240, 40);
+            this.btnInventory.Text = "📦 Inventory";
+            this.btnInventory.Click += new EventHandler(this.btnInventory_Click);
+
             // btnExit
-            this.btnExit.Location = new System.Drawing.Point(80, 420);
+            this.btnExit.Location = new System.Drawing.Point(80, 470);
             this.btnExit.Size = new System.Drawing.Size(240, 40);
             this.btnExit.Text = "Exit";
             this.btnExit.Click += new EventHandler(this.btnExit_Click);
 
-            // Settings Button
+            // Settings Button (small gear in top-right)
             this.btnSettings.Location = new System.Drawing.Point(350, 12);
             this.btnSettings.Size = new System.Drawing.Size(30, 30);
             this.btnSettings.Text = "⚙️";
-            this.btnSettings.Font = new System.Drawing.Font("Segoe UI Emoji", 10F);
-            this.btnSettings.Click += (s, e) => 
+            this.btnSettings.Font = new System.Drawing.Font(
+                "Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular);
+            this.btnSettings.Cursor = Cursors.Hand;
+            this.btnSettings.FlatStyle = FlatStyle.Flat;
+            this.btnSettings.FlatAppearance.BorderSize = 0;
+            this.btnSettings.Click += (s, e) =>
             {
                 var settingsForm = new SettingsForm();
                 settingsForm.ShowDialog();
@@ -123,12 +137,15 @@ namespace CostChef
             this.Controls.Add(this.btnImportExport);
             this.Controls.Add(this.btnSupplierReports);
             this.Controls.Add(this.btnPriceHistory);
+            this.Controls.Add(this.btnInventory);
             this.Controls.Add(this.btnExit);
             this.Controls.Add(this.btnSettings);
-            
+
             this.ResumeLayout(false);
             this.PerformLayout();
         }
+
+        // ===== Click Handlers =====
 
         private void btnIngredients_Click(object sender, EventArgs e)
         {
@@ -166,13 +183,21 @@ namespace CostChef
             priceHistoryForm.ShowDialog();
         }
 
+        // ✅ NEW: Inventory click handler
+        private void btnInventory_Click(object sender, EventArgs e)
+        {
+            var inventoryForm = new InventoryForm();
+            inventoryForm.ShowDialog();
+        }
+
         private void btnExit_Click(object sender, EventArgs e)
         {
-            var result = MessageBox.Show("Are you sure you want to exit CostChef?", 
-                "Exit Confirmation", 
-                MessageBoxButtons.YesNo, 
+            var result = MessageBox.Show(
+                "Are you sure you want to exit CostChef?",
+                "Exit Confirmation",
+                MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
-            
+
             if (result == DialogResult.Yes)
             {
                 Application.Exit();

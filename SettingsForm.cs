@@ -19,27 +19,25 @@ namespace CostChef
         private ComboBox cmbDecimalPlaces;
         private CheckBox chkConfirmDeletes;
         private CheckBox chkAutoCalculate;
+        private CheckBox chkAutoConvertUnits;
+        private ComboBox cmbDefaultFoodCost;
 
-        // Unit Preferences
+        // Unit Settings
         private ComboBox cmbWeightUnit;
         private ComboBox cmbVolumeUnit;
         private ComboBox cmbCountUnit;
-        private CheckBox chkAutoConvertUnits;
 
-        // Category Management
+        // Category Settings
         private ListBox lstIngredientCategories;
         private ListBox lstRecipeCategories;
         private TextBox txtNewIngredientCategory;
         private TextBox txtNewRecipeCategory;
         private Button btnAddIngredientCategory;
-        private Button btnAddRecipeCategory;
         private Button btnRemoveIngredientCategory;
+        private Button btnAddRecipeCategory;
         private Button btnRemoveRecipeCategory;
-
-        // Default Values
         private ComboBox cmbDefaultIngredientCategory;
         private ComboBox cmbDefaultRecipeCategory;
-        private ComboBox cmbDefaultFoodCost;
 
         // Currency mapping
         private Dictionary<string, string> currencyMap = new Dictionary<string, string>
@@ -55,9 +53,10 @@ namespace CostChef
         public SettingsForm()
         {
             InitializeComponent();
-            LoadSettings();
-            LoadCategories();
+            // Load units and categories first so combos have items
             LoadUnits();
+            LoadCategories();
+            LoadSettings();
         }
 
         private void InitializeComponent()
@@ -71,80 +70,88 @@ namespace CostChef
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(600, 500);
             this.Text = "Settings";
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
 
-            // Tab Control
-            this.tabControl.Location = new System.Drawing.Point(12, 12);
-            this.tabControl.Size = new System.Drawing.Size(576, 400);
-            this.tabControl.TabStop = false;
+            // TabControl
+            tabControl.Dock = DockStyle.Top;
+            tabControl.Height = 400;
 
-            // Create tabs
-            CreateGeneralTab();
-            CreateUnitsTab();
-            CreateCategoriesTab();
-            CreateDefaultsTab();
+            // Tabs
+            var tabGeneral = new TabPage("General");
+            var tabUnits = new TabPage("Units");
+            var tabCategories = new TabPage("Categories");
+
+            tabControl.TabPages.Add(tabGeneral);
+            tabControl.TabPages.Add(tabUnits);
+            tabControl.TabPages.Add(tabCategories);
+
+            // ========== GENERAL TAB ==========
+            InitializeGeneralTab(tabGeneral);
+
+            // ========== UNITS TAB ==========
+            InitializeUnitsTab(tabUnits);
+
+            // ========== CATEGORIES TAB ==========
+            InitializeCategoriesTab(tabCategories);
 
             // Buttons
-            this.btnSave.Text = "Save";
-            this.btnSave.Location = new System.Drawing.Point(350, 425);
-            this.btnSave.Size = new System.Drawing.Size(75, 30);
-            this.btnSave.Click += (s, e) => SaveSettings();
+            btnSave.Text = "Save";
+            btnSave.Location = new System.Drawing.Point(350, 425);
+            btnSave.Size = new System.Drawing.Size(75, 30);
+            btnSave.Click += (s, e) => SaveSettings();
 
-            this.btnCancel.Text = "Cancel";
-            this.btnCancel.Location = new System.Drawing.Point(435, 425);
-            this.btnCancel.Size = new System.Drawing.Size(75, 30);
-            this.btnCancel.Click += (s, e) => this.DialogResult = DialogResult.Cancel;
+            btnCancel.Text = "Cancel";
+            btnCancel.Location = new System.Drawing.Point(435, 425);
+            btnCancel.Size = new System.Drawing.Size(75, 30);
+            btnCancel.Click += (s, e) => this.DialogResult = DialogResult.Cancel;
 
-            this.btnApply.Text = "Apply";
-            this.btnApply.Location = new System.Drawing.Point(520, 425);
-            this.btnApply.Size = new System.Drawing.Size(75, 30);
-            this.btnApply.Click += (s, e) => ApplySettings();
+            btnApply.Text = "Apply";
+            btnApply.Location = new System.Drawing.Point(520, 425);
+            btnApply.Size = new System.Drawing.Size(75, 30);
+            btnApply.Click += (s, e) => ApplySettings();
 
-            this.Controls.AddRange(new Control[] {
-                tabControl, btnSave, btnCancel, btnApply
-            });
-
-            this.AcceptButton = btnSave;
-            this.CancelButton = btnCancel;
+            // Add controls to form
+            this.Controls.Add(tabControl);
+            this.Controls.Add(btnSave);
+            this.Controls.Add(btnCancel);
+            this.Controls.Add(btnApply);
 
             this.ResumeLayout(false);
         }
 
-        private void CreateGeneralTab()
+        private void InitializeGeneralTab(TabPage tab)
         {
-            var tab = new TabPage("General");
-            tab.Size = new System.Drawing.Size(572, 370);
-
             int yPos = 20;
 
-            // Currency Code
-            var lblCurrencyCode = new Label { 
-                Text = "Currency:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
+            // Currency selection
+            var lblCurrency = new Label
+            {
+                Text = "Currency:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
             };
-            cmbCurrencyCode = new ComboBox { 
-                Location = new System.Drawing.Point(150, yPos - 3), 
+            cmbCurrencyCode = new ComboBox
+            {
+                Location = new System.Drawing.Point(150, yPos - 3),
                 Size = new System.Drawing.Size(100, 20),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
-            // Currency codes for selection
-            cmbCurrencyCode.Items.AddRange(new object[] { 
-                "USD", "EUR", "JPY", "GBP", "CNY", "CHF", "AUD", "CAD", 
-                "HKD", "SGD", "INR", "KRW", "SEK", "MXN", "NZD", "NOK", 
-                "TWD", "BRL", "ZAR", "PLN", "PHP" 
+            cmbCurrencyCode.Items.AddRange(new object[]
+            {
+                "USD", "EUR", "JPY", "GBP", "CNY", "CHF", "AUD", "CAD",
+                "HKD", "SGD", "INR", "KRW", "SEK", "MXN", "NZD", "NOK",
+                "TWD", "BRL", "ZAR", "PLN", "PHP"
             });
             cmbCurrencyCode.SelectedIndexChanged += (s, e) => UpdateCurrencySymbol();
 
             // Currency Symbol Display
-            var lblSymbol = new Label { 
-                Text = "Symbol:", 
-                Location = new System.Drawing.Point(260, yPos), 
-                AutoSize = true 
+            var lblSymbol = new Label
+            {
+                Text = "Symbol:",
+                Location = new System.Drawing.Point(260, yPos),
+                AutoSize = true
             };
-            lblCurrencySymbol = new Label { 
+            lblCurrencySymbol = new Label
+            {
                 Text = "$",
                 Location = new System.Drawing.Point(310, yPos),
                 Size = new System.Drawing.Size(50, 20),
@@ -156,295 +163,280 @@ namespace CostChef
             yPos += 35;
 
             // Decimal Places
-            var lblDecimalPlaces = new Label { 
-                Text = "Decimal Places:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
+            var lblDecimalPlaces = new Label
+            {
+                Text = "Decimal Places:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
             };
-            cmbDecimalPlaces = new ComboBox { 
-                Location = new System.Drawing.Point(150, yPos - 3), 
+            cmbDecimalPlaces = new ComboBox
+            {
+                Location = new System.Drawing.Point(150, yPos - 3),
                 Size = new System.Drawing.Size(100, 20),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
-  // In CreateGeneralTab() method - update the cmbDecimalPlaces setup:
-cmbDecimalPlaces.Items.AddRange(new object[] { "0 (Whole numbers)", "1 (Tenths)", "2 (Money)" });
-cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
+            cmbDecimalPlaces.Items.AddRange(new object[]
+            {
+                "0 (Whole)",
+                "1 (Tenth)",
+                "2 (Money)",
+                "3 (Thousandth)",
+                "4",
+                "5"
+            });
 
             yPos += 35;
 
-            // Confirm Deletes
-            chkConfirmDeletes = new CheckBox { 
+            // Boolean settings
+            chkConfirmDeletes = new CheckBox
+            {
                 Text = "Confirm before deleting items",
                 Location = new System.Drawing.Point(20, yPos),
                 AutoSize = true
             };
+            yPos += 25;
 
-            yPos += 30;
-
-            // Auto Calculate
-            chkAutoCalculate = new CheckBox { 
-                Text = "Auto-calculate costs when changes occur",
+            chkAutoCalculate = new CheckBox
+            {
+                Text = "Automatically calculate costs on changes",
                 Location = new System.Drawing.Point(20, yPos),
                 AutoSize = true
             };
+            yPos += 25;
 
-            tab.Controls.AddRange(new Control[] {
-                lblCurrencyCode, cmbCurrencyCode, lblSymbol, lblCurrencySymbol,
-                lblDecimalPlaces, cmbDecimalPlaces,
-                chkConfirmDeletes, chkAutoCalculate
+            chkAutoConvertUnits = new CheckBox
+            {
+                Text = "Automatically convert units where possible",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
+            };
+            yPos += 35;
+
+            // Default Food Cost %
+            var lblDefaultFoodCost = new Label
+            {
+                Text = "Default Food Cost %:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
+            };
+            cmbDefaultFoodCost = new ComboBox
+            {
+                Location = new System.Drawing.Point(150, yPos - 3),
+                Size = new System.Drawing.Size(100, 20),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            cmbDefaultFoodCost.Items.AddRange(new object[]
+            {
+                "25%", "30%", "35%", "40%", "45%", "50%"
             });
 
-            tabControl.TabPages.Add(tab);
+            tab.Controls.Add(lblCurrency);
+            tab.Controls.Add(cmbCurrencyCode);
+            tab.Controls.Add(lblSymbol);
+            tab.Controls.Add(lblCurrencySymbol);
+            tab.Controls.Add(lblDecimalPlaces);
+            tab.Controls.Add(cmbDecimalPlaces);
+            tab.Controls.Add(chkConfirmDeletes);
+            tab.Controls.Add(chkAutoCalculate);
+            tab.Controls.Add(chkAutoConvertUnits);
+            tab.Controls.Add(lblDefaultFoodCost);
+            tab.Controls.Add(cmbDefaultFoodCost);
         }
 
-        private void CreateUnitsTab()
+        private void InitializeUnitsTab(TabPage tab)
         {
-            var tab = new TabPage("Units");
-            tab.Size = new System.Drawing.Size(572, 370);
-
             int yPos = 20;
 
-            // Weight Unit
-            var lblWeightUnit = new Label { 
-                Text = "Preferred Weight Unit:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
-            };
-            cmbWeightUnit = new ComboBox { 
-                Location = new System.Drawing.Point(180, yPos - 3), 
-                Size = new System.Drawing.Size(120, 20),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-
-            yPos += 35;
-
-            // Volume Unit
-            var lblVolumeUnit = new Label { 
-                Text = "Preferred Volume Unit:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
-            };
-            cmbVolumeUnit = new ComboBox { 
-                Location = new System.Drawing.Point(180, yPos - 3), 
-                Size = new System.Drawing.Size(120, 20),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-
-            yPos += 35;
-
-            // Count Unit
-            var lblCountUnit = new Label { 
-                Text = "Preferred Count Unit:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
-            };
-            cmbCountUnit = new ComboBox { 
-                Location = new System.Drawing.Point(180, yPos - 3), 
-                Size = new System.Drawing.Size(120, 20),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-
-            yPos += 35;
-
-            // Auto Convert
-            chkAutoConvertUnits = new CheckBox { 
-                Text = "Auto-convert units when possible",
+            // Weight unit
+            var lblWeightUnit = new Label
+            {
+                Text = "Default Weight Unit:",
                 Location = new System.Drawing.Point(20, yPos),
                 AutoSize = true
             };
-
-            yPos += 40;
-
-            // Unit Help
-            var lblUnitHelp = new Label { 
-                Text = "Note: These preferences affect default units in forms and calculations.",
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true,
-                Font = new Font(this.Font, FontStyle.Italic),
-                ForeColor = Color.Gray
+            cmbWeightUnit = new ComboBox
+            {
+                Location = new System.Drawing.Point(180, yPos - 3),
+                Size = new System.Drawing.Size(100, 20),
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            tab.Controls.AddRange(new Control[] {
-                lblWeightUnit, cmbWeightUnit,
-                lblVolumeUnit, cmbVolumeUnit,
-                lblCountUnit, cmbCountUnit,
-                chkAutoConvertUnits, lblUnitHelp
-            });
+            yPos += 35;
 
-            tabControl.TabPages.Add(tab);
+            // Volume unit
+            var lblVolumeUnit = new Label
+            {
+                Text = "Default Volume Unit:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
+            };
+            cmbVolumeUnit = new ComboBox
+            {
+                Location = new System.Drawing.Point(180, yPos - 3),
+                Size = new System.Drawing.Size(100, 20),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+
+            yPos += 35;
+
+            // Count unit
+            var lblCountUnit = new Label
+            {
+                Text = "Default Count Unit:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
+            };
+            cmbCountUnit = new ComboBox
+            {
+                Location = new System.Drawing.Point(180, yPos - 3),
+                Size = new System.Drawing.Size(100, 20),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+
+            tab.Controls.Add(lblWeightUnit);
+            tab.Controls.Add(cmbWeightUnit);
+            tab.Controls.Add(lblVolumeUnit);
+            tab.Controls.Add(cmbVolumeUnit);
+            tab.Controls.Add(lblCountUnit);
+            tab.Controls.Add(cmbCountUnit);
         }
 
-        private void CreateCategoriesTab()
+        private void InitializeCategoriesTab(TabPage tab)
         {
-            var tab = new TabPage("Categories");
-            tab.Size = new System.Drawing.Size(572, 370);
-
             int yPos = 20;
 
             // Ingredient Categories Section
-            var lblIngredientCategories = new Label { 
-                Text = "Ingredient Categories:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true,
-                Font = new Font(this.Font, FontStyle.Bold)
+            var lblIngredientCategories = new Label
+            {
+                Text = "Ingredient Categories:",
+                Location = new System.Drawing.Point(20, yPos),
+                AutoSize = true
             };
 
-            yPos += 25;
-
-            lstIngredientCategories = new ListBox { 
-                Location = new System.Drawing.Point(20, yPos), 
+            lstIngredientCategories = new ListBox
+            {
+                Location = new System.Drawing.Point(20, yPos + 25),
                 Size = new System.Drawing.Size(200, 120)
             };
 
-            txtNewIngredientCategory = new TextBox { 
-                Location = new System.Drawing.Point(20, yPos + 125), 
+            txtNewIngredientCategory = new TextBox
+            {
+                Location = new System.Drawing.Point(20, yPos + 150),
                 Size = new System.Drawing.Size(120, 20),
                 PlaceholderText = "New category..."
             };
 
-            btnAddIngredientCategory = new Button { 
+            btnAddIngredientCategory = new Button
+            {
                 Text = "Add",
-                Location = new System.Drawing.Point(150, yPos + 123),
+                Location = new System.Drawing.Point(150, yPos + 148),
                 Size = new System.Drawing.Size(70, 25)
             };
             btnAddIngredientCategory.Click += (s, e) => AddIngredientCategory();
 
-            btnRemoveIngredientCategory = new Button { 
+            btnRemoveIngredientCategory = new Button
+            {
                 Text = "Remove",
-                Location = new System.Drawing.Point(20, yPos + 155),
+                Location = new System.Drawing.Point(20, yPos + 180),
                 Size = new System.Drawing.Size(200, 25)
             };
             btnRemoveIngredientCategory.Click += (s, e) => RemoveIngredientCategory();
 
             // Recipe Categories Section
-            var lblRecipeCategories = new Label { 
-                Text = "Recipe Categories:", 
-                Location = new System.Drawing.Point(250, 20), 
-                AutoSize = true,
-                Font = new Font(this.Font, FontStyle.Bold)
+            var lblRecipeCategories = new Label
+            {
+                Text = "Recipe Categories:",
+                Location = new System.Drawing.Point(300, yPos),
+                AutoSize = true
             };
 
-            lstRecipeCategories = new ListBox { 
-                Location = new System.Drawing.Point(250, 45), 
+            lstRecipeCategories = new ListBox
+            {
+                Location = new System.Drawing.Point(300, yPos + 25),
                 Size = new System.Drawing.Size(200, 120)
             };
 
-            txtNewRecipeCategory = new TextBox { 
-                Location = new System.Drawing.Point(250, 170), 
+            txtNewRecipeCategory = new TextBox
+            {
+                Location = new System.Drawing.Point(300, yPos + 150),
                 Size = new System.Drawing.Size(120, 20),
                 PlaceholderText = "New category..."
             };
 
-            btnAddRecipeCategory = new Button { 
+            btnAddRecipeCategory = new Button
+            {
                 Text = "Add",
-                Location = new System.Drawing.Point(380, 168),
+                Location = new System.Drawing.Point(430, yPos + 148),
                 Size = new System.Drawing.Size(70, 25)
             };
             btnAddRecipeCategory.Click += (s, e) => AddRecipeCategory();
 
-            btnRemoveRecipeCategory = new Button { 
+            btnRemoveRecipeCategory = new Button
+            {
                 Text = "Remove",
-                Location = new System.Drawing.Point(250, 200),
+                Location = new System.Drawing.Point(300, yPos + 180),
                 Size = new System.Drawing.Size(200, 25)
             };
             btnRemoveRecipeCategory.Click += (s, e) => RemoveRecipeCategory();
 
-            // Help Text
-            var lblCategoryHelp = new Label { 
-                Text = "Note: Default categories cannot be removed. Changes affect dropdowns in forms.",
-                Location = new System.Drawing.Point(20, 300), 
-                AutoSize = true,
-                Font = new Font(this.Font, FontStyle.Italic),
-                ForeColor = Color.Gray
-            };
-
-            tab.Controls.AddRange(new Control[] {
-                lblIngredientCategories, lstIngredientCategories,
-                txtNewIngredientCategory, btnAddIngredientCategory, btnRemoveIngredientCategory,
-                lblRecipeCategories, lstRecipeCategories,
-                txtNewRecipeCategory, btnAddRecipeCategory, btnRemoveRecipeCategory,
-                lblCategoryHelp
-            });
-
-            tabControl.TabPages.Add(tab);
-        }
-
-        private void CreateDefaultsTab()
-        {
-            var tab = new TabPage("Defaults");
-            tab.Size = new System.Drawing.Size(572, 370);
-
-            int yPos = 20;
-
             // Default Ingredient Category
-            var lblDefaultIngredientCategory = new Label { 
-                Text = "Default Ingredient Category:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
+            var lblDefaultIngredientCategory = new Label
+            {
+                Text = "Default Ingredient Category:",
+                Location = new System.Drawing.Point(20, yPos + 220),
+                AutoSize = true
             };
-            cmbDefaultIngredientCategory = new ComboBox { 
-                Location = new System.Drawing.Point(200, yPos - 3), 
-                Size = new System.Drawing.Size(150, 20),
-                DropDownStyle = ComboBoxStyle.DropDown
-            };
-
-            yPos += 35;
-
-            // Default Recipe Category
-            var lblDefaultRecipeCategory = new Label { 
-                Text = "Default Recipe Category:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
-            };
-            cmbDefaultRecipeCategory = new ComboBox { 
-                Location = new System.Drawing.Point(200, yPos - 3), 
-                Size = new System.Drawing.Size(150, 20),
-                DropDownStyle = ComboBoxStyle.DropDown
-            };
-
-            yPos += 35;
-
-            // Default Food Cost
-            var lblDefaultFoodCost = new Label { 
-                Text = "Default Food Cost %:", 
-                Location = new System.Drawing.Point(20, yPos), 
-                AutoSize = true 
-            };
-            cmbDefaultFoodCost = new ComboBox { 
-                Location = new System.Drawing.Point(200, yPos - 3), 
-                Size = new System.Drawing.Size(100, 20),
+            cmbDefaultIngredientCategory = new ComboBox
+            {
+                Location = new System.Drawing.Point(20, yPos + 245),
+                Size = new System.Drawing.Size(200, 20),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
-            cmbDefaultFoodCost.Items.AddRange(new object[] { "25%", "30%", "35%", "40%" });
 
-            yPos += 50;
-
-            // Reset to Defaults Button
-            var btnResetDefaults = new Button { 
-                Text = "Reset All to Default Values",
-                Location = new System.Drawing.Point(20, yPos),
-                Size = new System.Drawing.Size(200, 30)
+            // Default Recipe Category
+            var lblDefaultRecipeCategory = new Label
+            {
+                Text = "Default Recipe Category:",
+                Location = new System.Drawing.Point(300, yPos + 220),
+                AutoSize = true
             };
-            btnResetDefaults.Click += (s, e) => ResetToDefaults();
+            cmbDefaultRecipeCategory = new ComboBox
+            {
+                Location = new System.Drawing.Point(300, yPos + 245),
+                Size = new System.Drawing.Size(200, 20),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
 
-            tab.Controls.AddRange(new Control[] {
-                lblDefaultIngredientCategory, cmbDefaultIngredientCategory,
-                lblDefaultRecipeCategory, cmbDefaultRecipeCategory,
-                lblDefaultFoodCost, cmbDefaultFoodCost,
-                btnResetDefaults
-            });
+            tab.Controls.Add(lblIngredientCategories);
+            tab.Controls.Add(lstIngredientCategories);
+            tab.Controls.Add(txtNewIngredientCategory);
+            tab.Controls.Add(btnAddIngredientCategory);
+            tab.Controls.Add(btnRemoveIngredientCategory);
 
-            tabControl.TabPages.Add(tab);
+            tab.Controls.Add(lblRecipeCategories);
+            tab.Controls.Add(lstRecipeCategories);
+            tab.Controls.Add(txtNewRecipeCategory);
+            tab.Controls.Add(btnAddRecipeCategory);
+            tab.Controls.Add(btnRemoveRecipeCategory);
+
+            tab.Controls.Add(lblDefaultIngredientCategory);
+            tab.Controls.Add(cmbDefaultIngredientCategory);
+            tab.Controls.Add(lblDefaultRecipeCategory);
+            tab.Controls.Add(cmbDefaultRecipeCategory);
         }
 
         private void UpdateCurrencySymbol()
         {
             if (cmbCurrencyCode.SelectedItem != null)
             {
-                string code = cmbCurrencyCode.SelectedItem.ToString();
-                if (currencyMap.ContainsKey(code))
+                string currencyCode = cmbCurrencyCode.SelectedItem.ToString();
+                if (currencyMap.TryGetValue(currencyCode, out var symbol))
                 {
-                    lblCurrencySymbol.Text = currencyMap[code];
+                    lblCurrencySymbol.Text = symbol;
+                }
+                else
+                {
+                    lblCurrencySymbol.Text = "$";
                 }
             }
         }
@@ -453,86 +445,200 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
         {
             try
             {
-                // Load current settings
-                cmbCurrencyCode.Text = AppSettings.CurrencySymbol;
-                UpdateCurrencySymbol(); // Update the symbol display
-                cmbDecimalPlaces.SelectedIndex = 1; // Default to 3 decimal places
-                chkConfirmDeletes.Checked = true;
-                chkAutoCalculate.Checked = true;
-                chkAutoConvertUnits.Checked = true;
-                cmbDefaultFoodCost.SelectedIndex = 1; // Default to 30%
+                var settings = DatabaseContext.GetAllSettings();
+
+                // --- Currency code + symbol ---
+                string currencyCode;
+                if (!settings.TryGetValue("CurrencyCode", out currencyCode) ||
+                    string.IsNullOrWhiteSpace(currencyCode))
+                {
+                    currencyCode = "USD"; // default
+                }
+
+                if (cmbCurrencyCode.Items.Contains(currencyCode))
+                {
+                    cmbCurrencyCode.SelectedItem = currencyCode;
+                }
+                else
+                {
+                    cmbCurrencyCode.SelectedItem = "USD";
+                    currencyCode = "USD";
+                }
+
+                // Update label + AppSettings
+                UpdateCurrencySymbol();
+                if (currencyMap.TryGetValue(currencyCode, out var symbol))
+                {
+                    AppSettings.CurrencySymbol = symbol;
+                }
+
+                // --- Decimal places (store as selected index) ---
+                int decimalIndex = 2; // default "2 (Money)"
+                if (settings.TryGetValue("DecimalPlaces", out var decimalIndexRaw) &&
+                    int.TryParse(decimalIndexRaw, out var idx) &&
+                    idx >= 0 && idx < cmbDecimalPlaces.Items.Count)
+                {
+                    decimalIndex = idx;
+                }
+                cmbDecimalPlaces.SelectedIndex = decimalIndex;
+
+                // --- Booleans ---
+                chkConfirmDeletes.Checked = GetBoolSetting(settings, "ConfirmDeletes", true);
+                chkAutoCalculate.Checked = GetBoolSetting(settings, "AutoCalculate", true);
+                chkAutoConvertUnits.Checked = GetBoolSetting(settings, "AutoConvertUnits", true);
+
+                // --- Units ---
+                SetComboFromSetting(cmbWeightUnit, settings, "PreferredWeightUnit");
+                SetComboFromSetting(cmbVolumeUnit, settings, "PreferredVolumeUnit");
+                SetComboFromSetting(cmbCountUnit, settings, "PreferredCountUnit");
+
+                // --- Default food cost ---
+                string defaultFoodCost = "30%";
+                if (settings.TryGetValue("DefaultFoodCost", out var foodCostRaw) &&
+                    !string.IsNullOrWhiteSpace(foodCostRaw))
+                {
+                    defaultFoodCost = foodCostRaw;
+                }
+
+                if (cmbDefaultFoodCost.Items.Contains(defaultFoodCost))
+                    cmbDefaultFoodCost.SelectedItem = defaultFoodCost;
+                else
+                    cmbDefaultFoodCost.SelectedItem = "30%";
+
+                // --- Default categories (after LoadCategories has filled the combos) ---
+                if (settings.TryGetValue("DefaultIngredientCategory", out var defIngCat) &&
+                    !string.IsNullOrWhiteSpace(defIngCat) &&
+                    cmbDefaultIngredientCategory.Items.Contains(defIngCat))
+                {
+                    cmbDefaultIngredientCategory.SelectedItem = defIngCat;
+                }
+
+                if (settings.TryGetValue("DefaultRecipeCategory", out var defRecCat) &&
+                    !string.IsNullOrWhiteSpace(defRecCat) &&
+                    cmbDefaultRecipeCategory.Items.Contains(defRecCat))
+                {
+                    cmbDefaultRecipeCategory.SelectedItem = defRecCat;
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading settings: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading settings: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private bool GetBoolSetting(Dictionary<string, string> settings, string key, bool defaultValue)
+        {
+            if (settings.TryGetValue(key, out var raw) && bool.TryParse(raw, out var value))
+            {
+                return value;
+            }
+            return defaultValue;
+        }
+
+        private void SetComboFromSetting(ComboBox combo, Dictionary<string, string> settings, string key)
+        {
+            if (combo == null) return;
+
+            if (settings.TryGetValue(key, out var value) &&
+                !string.IsNullOrWhiteSpace(value) &&
+                combo.Items.Contains(value))
+            {
+                combo.SelectedItem = value;
+            }
+        }
+
+        private List<string> GetDefaultIngredientCategories()
+        {
+            return new List<string> {
+                "Bakery", "Beverages", "Canned & Packaged", "Dairy & Eggs",
+                "Frozen Goods", "Fruit", "Grains", "Herbs", "Ingredients Base",
+                "Meat & Poultry", "Oils & Fats", "Pasta", "Sauces & Condiments",
+                "Seafood", "Spices", "Vegetables"
+            };
+        }
+
+        private List<string> GetDefaultRecipeCategories()
+        {
+            return new List<string> {
+                "Appetizer", "Soup & Salad", "Entrée", "Side Dish",
+                "Dessert", "Baking", "Breakfast/Brunch", "Beverages", "Hot Drink"
+            };
         }
 
         private void LoadCategories()
         {
             try
             {
-                // Load default ingredient categories
-                var defaultIngredientCategories = new List<string> { 
-                    "Bakery", "Beverages", "Canned & Packaged", "Dairy & Eggs", 
-                    "Frozen Goods", "Fruit", "Grains", "Herbs", "Ingredients Base", 
-                    "Meat & Poultry", "Oils & Fats", "Pasta", "Sauces & Condiments", 
-                    "Seafood", "Spices", "Vegetables" 
-                };
+                var defaultIngredientCategories = GetDefaultIngredientCategories();
+                var defaultRecipeCategories = GetDefaultRecipeCategories();
 
-                // Load default recipe categories
-                var defaultRecipeCategories = new List<string> { 
-                    "Appetizer", "Soup & Salad", "Entrée", "Side Dish", 
-                    "Dessert", "Baking", "Breakfast/Brunch", "Beverages", "Hot Drink" 
-                };
-
-                // Load existing categories from database
+                // Categories already in use in the DB
                 var existingIngredientCategories = DatabaseContext.GetIngredientCategories();
                 var existingRecipeCategories = DatabaseContext.GetRecipeCategories();
 
-                // Populate ingredient categories list
+                // Custom categories from the settings table
+                var settings = DatabaseContext.GetAllSettings();
+
+                var customIngredientCategories = new List<string>();
+                if (settings.TryGetValue("CustomIngredientCategories", out var ingRaw) &&
+                    !string.IsNullOrWhiteSpace(ingRaw))
+                {
+                    customIngredientCategories = ingRaw
+                        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(c => c.Trim())
+                        .Where(c => !string.IsNullOrEmpty(c))
+                        .ToList();
+                }
+
+                var customRecipeCategories = new List<string>();
+                if (settings.TryGetValue("CustomRecipeCategories", out var recRaw) &&
+                    !string.IsNullOrWhiteSpace(recRaw))
+                {
+                    customRecipeCategories = recRaw
+                        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(c => c.Trim())
+                        .Where(c => !string.IsNullOrEmpty(c))
+                        .ToList();
+                }
+
+                // Final sorted, case-insensitive sets
+                var ingredientCategoriesSet = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var c in defaultIngredientCategories) ingredientCategoriesSet.Add(c);
+                foreach (var c in existingIngredientCategories ?? Enumerable.Empty<string>())
+                    if (!string.IsNullOrWhiteSpace(c)) ingredientCategoriesSet.Add(c);
+                foreach (var c in customIngredientCategories) ingredientCategoriesSet.Add(c);
+
+                var recipeCategoriesSet = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var c in defaultRecipeCategories) recipeCategoriesSet.Add(c);
+                foreach (var c in existingRecipeCategories ?? Enumerable.Empty<string>())
+                    if (!string.IsNullOrWhiteSpace(c)) recipeCategoriesSet.Add(c);
+                foreach (var c in customRecipeCategories) recipeCategoriesSet.Add(c);
+
+                // Ingredient categories listbox
                 lstIngredientCategories.Items.Clear();
-                foreach (var category in defaultIngredientCategories)
-                {
-                    lstIngredientCategories.Items.Add(category);
-                }
-                foreach (var category in existingIngredientCategories)
-                {
-                    if (!string.IsNullOrEmpty(category) && !lstIngredientCategories.Items.Contains(category))
-                        lstIngredientCategories.Items.Add(category);
-                }
+                foreach (var c in ingredientCategoriesSet)
+                    lstIngredientCategories.Items.Add(c);
 
-                // Populate recipe categories list
+                // Recipe categories listbox
                 lstRecipeCategories.Items.Clear();
-                foreach (var category in defaultRecipeCategories)
-                {
-                    lstRecipeCategories.Items.Add(category);
-                }
-                foreach (var category in existingRecipeCategories)
-                {
-                    if (!string.IsNullOrEmpty(category) && !lstRecipeCategories.Items.Contains(category))
-                        lstRecipeCategories.Items.Add(category);
-                }
+                foreach (var c in recipeCategoriesSet)
+                    lstRecipeCategories.Items.Add(c);
 
-                // Populate default category dropdowns
+                // Default category dropdowns
                 cmbDefaultIngredientCategory.Items.Clear();
-                cmbDefaultIngredientCategory.Items.Add(""); // Empty option
-                foreach (var category in defaultIngredientCategories)
-                {
-                    cmbDefaultIngredientCategory.Items.Add(category);
-                }
+                cmbDefaultIngredientCategory.Items.Add(""); // empty option
+                foreach (var c in ingredientCategoriesSet)
+                    cmbDefaultIngredientCategory.Items.Add(c);
 
                 cmbDefaultRecipeCategory.Items.Clear();
-                cmbDefaultRecipeCategory.Items.Add(""); // Empty option
-                foreach (var category in defaultRecipeCategories)
-                {
-                    cmbDefaultRecipeCategory.Items.Add(category);
-                }
+                cmbDefaultRecipeCategory.Items.Add(""); // empty option
+                foreach (var c in recipeCategoriesSet)
+                    cmbDefaultRecipeCategory.Items.Add(c);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading categories: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading categories: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -543,8 +649,8 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             {
                 // Weight units
                 cmbWeightUnit.Items.Clear();
-                cmbWeightUnit.Items.AddRange(new object[] { "gram", "kg", "oz", "lb" });
-                cmbWeightUnit.SelectedIndex = 0; // Default to grams
+                cmbWeightUnit.Items.AddRange(new object[] { "g", "kg", "oz", "lb" });
+                cmbWeightUnit.SelectedIndex = 1; // Default to kg
 
                 // Volume units
                 cmbVolumeUnit.Items.Clear();
@@ -558,7 +664,7 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading units: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading units: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -568,14 +674,14 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             var newCategory = txtNewIngredientCategory.Text.Trim();
             if (!string.IsNullOrEmpty(newCategory))
             {
-                if (!lstIngredientCategories.Items.Cast<string>().Any(c => 
+                if (!lstIngredientCategories.Items.Cast<string>().Any(c =>
                     c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
                 {
                     lstIngredientCategories.Items.Add(newCategory);
                     txtNewIngredientCategory.Text = "";
-                    
+
                     // Also add to default category dropdown
-                    if (!cmbDefaultIngredientCategory.Items.Cast<string>().Any(c => 
+                    if (!cmbDefaultIngredientCategory.Items.Cast<string>().Any(c =>
                         c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
                     {
                         cmbDefaultIngredientCategory.Items.Add(newCategory);
@@ -583,7 +689,7 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
                 }
                 else
                 {
-                    MessageBox.Show("Category already exists.", "Information", 
+                    MessageBox.Show($"Category '{newCategory}' already exists.", "Information",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -594,35 +700,33 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             if (lstIngredientCategories.SelectedItem != null)
             {
                 var selected = lstIngredientCategories.SelectedItem.ToString();
-                
-                // UPDATED: Default ingredient categories
-                var defaultCategories = new List<string> { 
-                    "Bakery", "Beverages", "Canned & Packaged", "Dairy & Eggs", 
-                    "Frozen Goods", "Fruit", "Grains", "Herbs", "Ingredients Base", 
-                    "Meat & Poultry", "Oils & Fats", "Pasta", "Sauces & Condiments", 
-                    "Seafood", "Spices", "Vegetables" 
+
+                // Default ingredient categories
+                var defaultCategories = new List<string> {
+                    "Bakery", "Beverages", "Canned & Packaged", "Dairy & Eggs",
+                    "Frozen Goods", "Fruit", "Grains", "Herbs", "Ingredients Base",
+                    "Meat & Poultry", "Oils & Fats", "Pasta", "Sauces & Condiments",
+                    "Seafood", "Spices", "Vegetables"
                 };
-                
+
                 if (defaultCategories.Contains(selected))
                 {
-                    MessageBox.Show($"Cannot remove default category '{selected}'.", "Information", 
+                    MessageBox.Show($"Cannot remove default category '{selected}'.", "Information",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                
-                var result = MessageBox.Show($"Remove category '{selected}'?", "Confirm Remove", 
+
+                var result = MessageBox.Show($"Remove category '{selected}'?", "Confirm Remove",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                
+
                 if (result == DialogResult.Yes)
                 {
                     lstIngredientCategories.Items.Remove(selected);
-                    
-                    // Also remove from default category dropdown
-                    var itemToRemove = cmbDefaultIngredientCategory.Items.Cast<string>()
-                        .FirstOrDefault(c => c.Equals(selected, StringComparison.OrdinalIgnoreCase));
-                    if (itemToRemove != null)
+
+                    // Also remove from default dropdown if present
+                    if (cmbDefaultIngredientCategory.Items.Contains(selected))
                     {
-                        cmbDefaultIngredientCategory.Items.Remove(itemToRemove);
+                        cmbDefaultIngredientCategory.Items.Remove(selected);
                     }
                 }
             }
@@ -633,14 +737,14 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             var newCategory = txtNewRecipeCategory.Text.Trim();
             if (!string.IsNullOrEmpty(newCategory))
             {
-                if (!lstRecipeCategories.Items.Cast<string>().Any(c => 
+                if (!lstRecipeCategories.Items.Cast<string>().Any(c =>
                     c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
                 {
                     lstRecipeCategories.Items.Add(newCategory);
                     txtNewRecipeCategory.Text = "";
-                    
+
                     // Also add to default category dropdown
-                    if (!cmbDefaultRecipeCategory.Items.Cast<string>().Any(c => 
+                    if (!cmbDefaultRecipeCategory.Items.Cast<string>().Any(c =>
                         c.Equals(newCategory, StringComparison.OrdinalIgnoreCase)))
                     {
                         cmbDefaultRecipeCategory.Items.Add(newCategory);
@@ -648,7 +752,7 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
                 }
                 else
                 {
-                    MessageBox.Show("Category already exists.", "Information", 
+                    MessageBox.Show($"Category '{newCategory}' already exists.", "Information",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -659,92 +763,117 @@ cmbDecimalPlaces.SelectedIndex = 2; // Default to 2 decimal places
             if (lstRecipeCategories.SelectedItem != null)
             {
                 var selected = lstRecipeCategories.SelectedItem.ToString();
-                
-                // UPDATED: Default recipe categories
-                var defaultCategories = new List<string> { 
-                    "Appetizer", "Soup & Salad", "Entrée", "Side Dish", 
-                    "Dessert", "Baking", "Breakfast/Brunch", "Beverages", "Hot Drink" 
+
+                // Default recipe categories
+                var defaultCategories = new List<string> {
+                    "Appetizer", "Soup & Salad", "Entrée", "Side Dish",
+                    "Dessert", "Baking", "Breakfast/Brunch", "Beverages", "Hot Drink"
                 };
-                
+
                 if (defaultCategories.Contains(selected))
                 {
-                    MessageBox.Show($"Cannot remove default category '{selected}'.", "Information", 
+                    MessageBox.Show($"Cannot remove default category '{selected}'.", "Information",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                
-                var result = MessageBox.Show($"Remove category '{selected}'?", "Confirm Remove", 
+
+                var result = MessageBox.Show($"Remove category '{selected}'?", "Confirm Remove",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                
+
                 if (result == DialogResult.Yes)
                 {
                     lstRecipeCategories.Items.Remove(selected);
-                    
-                    // Also remove from default category dropdown
-                    var itemToRemove = cmbDefaultRecipeCategory.Items.Cast<string>()
-                        .FirstOrDefault(c => c.Equals(selected, StringComparison.OrdinalIgnoreCase));
-                    if (itemToRemove != null)
+
+                    // Also remove from default dropdown if present
+                    if (cmbDefaultRecipeCategory.Items.Contains(selected))
                     {
-                        cmbDefaultRecipeCategory.Items.Remove(itemToRemove);
+                        cmbDefaultRecipeCategory.Items.Remove(selected);
                     }
                 }
-            }
-        }
-
-        private void ResetToDefaults()
-        {
-            var result = MessageBox.Show(
-                "Reset all settings to default values?\n\nThis will not affect your data.",
-                "Reset Settings", 
-                MessageBoxButtons.YesNo, 
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                LoadSettings();
-                LoadUnits();
-                MessageBox.Show("Settings reset to defaults.", "Success", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
         private void ApplySettings()
         {
             SaveSettings();
-            MessageBox.Show("Settings applied successfully.", "Success", 
+            MessageBox.Show("Settings applied successfully.", "Success",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void SaveCategoriesToSettings()
+        {
+            try
+            {
+                var defaultIngredientCategories = GetDefaultIngredientCategories();
+                var defaultRecipeCategories = GetDefaultRecipeCategories();
+
+                // Only store non-default categories as "custom"
+                var customIngredientCategories = lstIngredientCategories.Items.Cast<string>()
+                    .Where(c => !defaultIngredientCategories.Contains(c, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(c => c)
+                    .ToList();
+
+                var customRecipeCategories = lstRecipeCategories.Items.Cast<string>()
+                    .Where(c => !defaultRecipeCategories.Contains(c, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(c => c)
+                    .ToList();
+
+                DatabaseContext.SetSetting("CustomIngredientCategories",
+                    string.Join(";", customIngredientCategories));
+                DatabaseContext.SetSetting("CustomRecipeCategories",
+                    string.Join(";", customRecipeCategories));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving categories: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void SaveSettings()
         {
             try
             {
-                // Save both currency code and symbol
+                // --- Currency ---
                 string currencyCode = cmbCurrencyCode.SelectedItem?.ToString() ?? "USD";
                 string currencySymbol = currencyMap.ContainsKey(currencyCode) ? currencyMap[currencyCode] : "$";
 
-                // Save to AppSettings
+                // Update AppSettings for immediate use
                 AppSettings.CurrencySymbol = currencySymbol;
 
-                // Save to database settings table for persistence
+                // Persist currency in DB
                 DatabaseContext.SetSetting("CurrencyCode", currencyCode);
                 DatabaseContext.SetSetting("CurrencySymbol", currencySymbol);
+
+                // --- Decimal places (store selected index) ---
+                DatabaseContext.SetSetting("DecimalPlaces", cmbDecimalPlaces.SelectedIndex.ToString());
+
+                // --- Booleans ---
                 DatabaseContext.SetSetting("ConfirmDeletes", chkConfirmDeletes.Checked.ToString());
                 DatabaseContext.SetSetting("AutoCalculate", chkAutoCalculate.Checked.ToString());
                 DatabaseContext.SetSetting("AutoConvertUnits", chkAutoConvertUnits.Checked.ToString());
+
+                // --- Units ---
                 DatabaseContext.SetSetting("PreferredWeightUnit", cmbWeightUnit.SelectedItem?.ToString());
                 DatabaseContext.SetSetting("PreferredVolumeUnit", cmbVolumeUnit.SelectedItem?.ToString());
                 DatabaseContext.SetSetting("PreferredCountUnit", cmbCountUnit.SelectedItem?.ToString());
-                DatabaseContext.SetSetting("DefaultFoodCost", cmbDefaultFoodCost.SelectedItem?.ToString());
 
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+                // --- Default values ---
+                DatabaseContext.SetSetting("DefaultFoodCost", cmbDefaultFoodCost.SelectedItem?.ToString());
+                DatabaseContext.SetSetting("DefaultIngredientCategory", cmbDefaultIngredientCategory.Text ?? string.Empty);
+                DatabaseContext.SetSetting("DefaultRecipeCategory", cmbDefaultRecipeCategory.Text ?? string.Empty);
+
+                // --- Custom categories ---
+                SaveCategoriesToSettings();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving settings: {ex.Message}", "Error", 
+                MessageBox.Show($"Error saving settings: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
     }
 }

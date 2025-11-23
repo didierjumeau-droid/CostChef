@@ -9,6 +9,9 @@ namespace CostChef
     {
         private static string _connectionString = "Data Source=costchef.db;Version=3;";
 
+        // FIX: Added public property for other partial files to access the connection string (CS0117/CS0103 fix)
+        public static string ConnectionString => _connectionString;
+
         public static void InitializeDatabase()
         {
             if (!File.Exists("costchef.db"))
@@ -23,15 +26,16 @@ namespace CostChef
                 using (var command = new SQLiteCommand(connection))
                 {
                     // Create ingredients table
-                    string createIngredientsTable = @"
-                        CREATE TABLE IF NOT EXISTS ingredients (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            name TEXT NOT NULL UNIQUE,
-                            unit TEXT NOT NULL,
-                            unit_price REAL NOT NULL,
-                            category TEXT,
-                            supplier_id INTEGER
-                        )";
+        string createIngredientsTable = @"
+    CREATE TABLE IF NOT EXISTS ingredients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        unit TEXT NOT NULL,
+        unit_price REAL NOT NULL,
+        category TEXT,
+        supplier_id INTEGER
+    )";
+
 
                     // Create price_history table
                     string createPriceHistoryTable = @"
@@ -47,6 +51,7 @@ namespace CostChef
                         )";
 
                     // Create recipes table
+                    // FIX: Added sales_price column and changed target_food_cost_percentage default
                     string createRecipesTable = @"
                         CREATE TABLE IF NOT EXISTS recipes (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +60,8 @@ namespace CostChef
                             category TEXT,
                             tags TEXT,
                             batch_yield INTEGER DEFAULT 1,
-                            target_food_cost_percentage REAL DEFAULT 30.0
+                            target_food_cost_percentage REAL DEFAULT 0.30,
+                            sales_price REAL DEFAULT 0.0
                         )";
 
                     // Create recipe_versions table
@@ -103,6 +109,43 @@ namespace CostChef
                             value TEXT
                         )";
 
+                    // Create inventory_levels table
+                    string createInventoryLevelsTable = @"
+                        CREATE TABLE IF NOT EXISTS inventory_levels (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ingredient_id INTEGER NOT NULL UNIQUE,
+                            current_stock REAL DEFAULT 0,
+                            minimum_stock REAL,
+                            maximum_stock REAL,
+                            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (ingredient_id) REFERENCES ingredients (id)
+                        )";
+
+                    // Create inventory_history table
+                    string createInventoryHistoryTable = @"
+                        CREATE TABLE IF NOT EXISTS inventory_history (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ingredient_id INTEGER NOT NULL,
+                            previous_stock REAL NOT NULL,
+                            new_stock REAL NOT NULL,
+                            change_amount REAL NOT NULL,
+                            change_type TEXT NOT NULL,
+                            change_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            reason TEXT,
+                            recipe_id INTEGER,
+                            unit_cost REAL,
+                            FOREIGN KEY (ingredient_id) REFERENCES ingredients (id)
+                        )";
+
+                    // Create inventory_snapshots table
+                    string createInventorySnapshotsTable = @"
+                        CREATE TABLE IF NOT EXISTS inventory_snapshots (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            snapshot_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            total_value REAL,
+                            ingredient_count INTEGER
+                        )";
+                        
                     // Execute all table creation commands
                     command.CommandText = createIngredientsTable;
                     command.ExecuteNonQuery();
@@ -124,6 +167,15 @@ namespace CostChef
 
                     command.CommandText = createSettingsTable;
                     command.ExecuteNonQuery();
+                    
+                    command.CommandText = createInventoryLevelsTable;
+                    command.ExecuteNonQuery();
+                    
+                    command.CommandText = createInventoryHistoryTable;
+                    command.ExecuteNonQuery();
+
+                    command.CommandText = createInventorySnapshotsTable;
+                    command.ExecuteNonQuery();
                 }
             }
         }
@@ -132,75 +184,7 @@ namespace CostChef
         {
             return new SQLiteConnection(_connectionString);
         }
-
-        // ========== SAFE DATA READER METHODS ==========
-
-        private static string SafeGetString(SQLiteDataReader reader, string columnName)
-        {
-            try
-            {
-                int ordinal = reader.GetOrdinal(columnName);
-                return reader.IsDBNull(ordinal) ? string.Empty : reader.GetString(ordinal);
-            }
-            catch (IndexOutOfRangeException)
-            {
-                return string.Empty;
-            }
-            catch (Exception)
-            {
-                return string.Empty;
-            }
-        }
-
-        private static int SafeGetInt(SQLiteDataReader reader, string columnName)
-        {
-            try
-            {
-                int ordinal = reader.GetOrdinal(columnName);
-                return reader.IsDBNull(ordinal) ? 0 : reader.GetInt32(ordinal);
-            }
-            catch (IndexOutOfRangeException)
-            {
-                return 0;
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
-        }
-
-        private static decimal SafeGetDecimal(SQLiteDataReader reader, string columnName)
-        {
-            try
-            {
-                int ordinal = reader.GetOrdinal(columnName);
-                return reader.IsDBNull(ordinal) ? 0 : reader.GetDecimal(ordinal);
-            }
-            catch (IndexOutOfRangeException)
-            {
-                return 0;
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
-        }
-
-        private static int? SafeGetNullableInt(SQLiteDataReader reader, string columnName)
-        {
-            try
-            {
-                int ordinal = reader.GetOrdinal(columnName);
-                return reader.IsDBNull(ordinal) ? (int?)null : reader.GetInt32(ordinal);
-            }
-            catch (IndexOutOfRangeException)
-            {
-                return null;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        
+        // SafeGet* methods were removed from this file previously to fix CS0111
     }
 }

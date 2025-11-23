@@ -1,200 +1,137 @@
-
 using System;
-using System.Windows.Forms;
-using System.Collections.Generic;
-using System.Linq;
+using System.Data;
 using System.Drawing;
+using System.Windows.Forms;
 
 namespace CostChef
 {
     public partial class IngredientsForm : Form
     {
         private DataGridView dataGridViewIngredients;
+        private Button btnClose;
+        private Button btnRefresh;
         private Button btnAddIngredient;
         private Button btnEditIngredient;
-        private Button btnDeleteIngredient;
-        private Button btnClose;
-        private TextBox txtSearch;
-        private ComboBox cmbCategoryFilter;
-        private Button btnRefresh;
+        private Label lblSummary;
+
+        private BindingSource _ingredients = new BindingSource();
 
         public IngredientsForm()
         {
             InitializeComponent();
-            LoadIngredients();
-            LoadCategories();
+            LoadIngredientData();
         }
 
         private void InitializeComponent()
         {
             this.dataGridViewIngredients = new DataGridView();
+            this.btnClose = new Button();
+            this.btnRefresh = new Button();
             this.btnAddIngredient = new Button();
             this.btnEditIngredient = new Button();
-            this.btnDeleteIngredient = new Button();
-            this.btnClose = new Button();
-            this.txtSearch = new TextBox();
-            this.cmbCategoryFilter = new ComboBox();
-            this.btnRefresh = new Button();
+            this.lblSummary = new Label();
 
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(800, 500);
-            this.Text = "Manage Ingredients";
-            this.StartPosition = FormStartPosition.CenterParent;
 
-            // Search
-            var lblSearch = new Label { Text = "Search:", Location = new System.Drawing.Point(12, 15), AutoSize = true };
-            this.txtSearch.Location = new System.Drawing.Point(60, 12);
-            this.txtSearch.Size = new System.Drawing.Size(150, 20);
-            this.txtSearch.TextChanged += (s, e) => LoadIngredients();
-
-            // Category Filter
-            var lblCategory = new Label { Text = "Category:", Location = new System.Drawing.Point(220, 15), AutoSize = true };
-            this.cmbCategoryFilter.Location = new System.Drawing.Point(280, 12);
-            this.cmbCategoryFilter.Size = new System.Drawing.Size(150, 20);
-            this.cmbCategoryFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cmbCategoryFilter.SelectedIndexChanged += (s, e) => LoadIngredients();
-
-            // Refresh Button
-            this.btnRefresh.Location = new System.Drawing.Point(440, 10);
-            this.btnRefresh.Size = new System.Drawing.Size(80, 25);
-            this.btnRefresh.Text = "Refresh";
-            this.btnRefresh.Click += (s, e) => LoadIngredients();
-
-            // DataGrid
-            this.dataGridViewIngredients.Location = new System.Drawing.Point(12, 40);
-            this.dataGridViewIngredients.Size = new System.Drawing.Size(776, 350);
+            // Data grid
+            this.dataGridViewIngredients.Location = new Point(12, 12);
+            this.dataGridViewIngredients.Size = new Size(780, 350);
+            this.dataGridViewIngredients.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             this.dataGridViewIngredients.ReadOnly = true;
             this.dataGridViewIngredients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            this.dataGridViewIngredients.MultiSelect = false;
             this.dataGridViewIngredients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            this.dataGridViewIngredients.AllowUserToAddRows = false;
+            this.dataGridViewIngredients.AllowUserToDeleteRows = false;
 
-            // Buttons
-            this.btnAddIngredient.Location = new System.Drawing.Point(12, 410);
-            this.btnAddIngredient.Size = new System.Drawing.Size(100, 30);
-            this.btnAddIngredient.Text = "Add Ingredient";
-            this.btnAddIngredient.Click += (s, e) => AddIngredient();
+            // Refresh button
+            this.btnRefresh.Text = "Refresh";
+            this.btnRefresh.Location = new Point(12, 380);
+            this.btnRefresh.Click += btnRefresh_Click;
 
-            this.btnEditIngredient.Location = new System.Drawing.Point(122, 410);
-            this.btnEditIngredient.Size = new System.Drawing.Size(100, 30);
-            this.btnEditIngredient.Text = "Edit Ingredient";
-            this.btnEditIngredient.Click += (s, e) => EditIngredient();
+            // Add Ingredient button
+            this.btnAddIngredient.Text = "Add";
+            this.btnAddIngredient.Location = new Point(110, 380);
+            this.btnAddIngredient.Click += btnAddIngredient_Click;
 
-            this.btnDeleteIngredient.Location = new System.Drawing.Point(232, 410);
-            this.btnDeleteIngredient.Size = new System.Drawing.Size(100, 30);
-            this.btnDeleteIngredient.Text = "Delete Ingredient";
-            this.btnDeleteIngredient.Click += (s, e) => DeleteIngredient();
+            // Edit Ingredient button
+            this.btnEditIngredient.Text = "Edit";
+            this.btnEditIngredient.Location = new Point(200, 380);
+            this.btnEditIngredient.Click += btnEditIngredient_Click;
 
-            this.btnClose.Location = new System.Drawing.Point(688, 410);
-            this.btnClose.Size = new System.Drawing.Size(100, 30);
+            // Close button
             this.btnClose.Text = "Close";
-            this.btnClose.Click += (s, e) => this.Close();
+            this.btnClose.Location = new Point(700, 380);
+            this.btnClose.Click += btnClose_Click;
 
-            this.Controls.AddRange(new Control[] {
-                lblSearch, txtSearch, lblCategory, cmbCategoryFilter, btnRefresh,
-                dataGridViewIngredients, btnAddIngredient, btnEditIngredient,
-                btnDeleteIngredient, btnClose
-            });
+            // Summary label
+            this.lblSummary.Location = new Point(300, 380);
+            this.lblSummary.AutoSize = true;
+
+            // Form
+            this.ClientSize = new Size(800, 430);
+            this.Controls.Add(this.dataGridViewIngredients);
+            this.Controls.Add(this.btnClose);
+            this.Controls.Add(this.btnRefresh);
+            this.Controls.Add(this.btnAddIngredient);
+            this.Controls.Add(this.btnEditIngredient);
+            this.Controls.Add(this.lblSummary);
+
+            this.Text = "Ingredients";
+            this.StartPosition = FormStartPosition.CenterParent;
 
             this.ResumeLayout(false);
             this.PerformLayout();
         }
 
-        private void LoadIngredients()
+        private void LoadIngredientData()
         {
-            try
-            {
-                var ingredients = DatabaseContext.GetAllIngredients();
-                
-                // Search filter
-                var searchTerm = txtSearch.Text.ToLower();
-                if (!string.IsNullOrEmpty(searchTerm))
-                {
-                    ingredients = ingredients.Where(i => 
-                        i.Name.ToLower().Contains(searchTerm) ||
-                        i.Category.ToLower().Contains(searchTerm) ||
-                        (i.SupplierName ?? "").ToLower().Contains(searchTerm)
-                    ).ToList();
-                }
+            // Use the full ingredients list from DB
+            var ingredients = DatabaseContext.GetAllIngredients();
 
-                // Category filter
-                if (cmbCategoryFilter.SelectedItem != null && !string.IsNullOrEmpty(cmbCategoryFilter.SelectedItem.ToString()))
-                {
-                    ingredients = ingredients.Where(i => 
-                        i.Category == cmbCategoryFilter.SelectedItem.ToString()
-                    ).ToList();
-                }
+            _ingredients.DataSource = ingredients;
+            dataGridViewIngredients.DataSource = _ingredients;
 
-                dataGridViewIngredients.DataSource = ingredients;
-            }
-            catch (Exception ex)
+            // Hide technical columns (ID, SupplierId)
+            if (dataGridViewIngredients.Columns.Contains("Id"))
+                dataGridViewIngredients.Columns["Id"].Visible = false;
+
+            if (dataGridViewIngredients.Columns.Contains("SupplierId"))
+                dataGridViewIngredients.Columns["SupplierId"].Visible = false;
+
+            lblSummary.Text = $"Total Ingredients: {ingredients.Count}";
+        }
+
+        private void btnRefresh_Click(object sender, EventArgs e)
+        {
+            LoadIngredientData();
+        }
+
+        private void btnAddIngredient_Click(object sender, EventArgs e)
+        {
+            var form = new IngredientEditForm();
+            if (form.ShowDialog() == DialogResult.OK)
             {
-                MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LoadIngredientData();
             }
         }
 
-        private void LoadCategories()
-        {
-            try
-            {
-                var categories = DatabaseContext.GetIngredientCategories();
-                cmbCategoryFilter.Items.Clear();
-                cmbCategoryFilter.Items.Add("");
-                foreach (var category in categories)
-                {
-                    cmbCategoryFilter.Items.Add(category);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading categories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void AddIngredient()
-        {
-            using (var form = new IngredientEditForm())
-            {
-                if (form.ShowDialog() == DialogResult.OK)
-                {
-                    LoadIngredients();
-                }
-            }
-        }
-
-        private void EditIngredient()
+        private void btnEditIngredient_Click(object sender, EventArgs e)
         {
             if (dataGridViewIngredients.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select an ingredient to edit.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
-            }
 
-            var ingredient = (Ingredient)dataGridViewIngredients.SelectedRows[0].DataBoundItem;
-            using (var form = new IngredientEditForm(ingredient))
+            var item = (Ingredient)dataGridViewIngredients.SelectedRows[0].DataBoundItem;
+            var form = new IngredientEditForm(item);
+            if (form.ShowDialog() == DialogResult.OK)
             {
-                if (form.ShowDialog() == DialogResult.OK)
-                {
-                    LoadIngredients();
-                }
+                LoadIngredientData();
             }
         }
 
-        private void DeleteIngredient()
+        private void btnClose_Click(object sender, EventArgs e)
         {
-            if (dataGridViewIngredients.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select an ingredient to delete.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var ingredient = (Ingredient)dataGridViewIngredients.SelectedRows[0].DataBoundItem;
-            var result = MessageBox.Show($"Delete {ingredient.Name}?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            
-            if (result == DialogResult.Yes)
-            {
-                DatabaseContext.DeleteIngredient(ingredient.Id);
-                LoadIngredients();
-                MessageBox.Show("Deleted successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            this.Close();
         }
     }
 }

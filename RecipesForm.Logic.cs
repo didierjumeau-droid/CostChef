@@ -3,6 +3,8 @@ using System.Windows.Forms;
 using System.Linq;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text; // For StringBuilder
+using System.Diagnostics;
 
 namespace CostChef
 {
@@ -36,63 +38,42 @@ namespace CostChef
             {
                 if (cmbExistingRecipes.SelectedItem is Recipe selectedRecipe)
                 {
-                    currentRecipe = selectedRecipe;
-                    
-                    // Load recipe ingredients from database
-                    currentIngredients = DatabaseContext.GetRecipeIngredients(currentRecipe.Id);
+                    // FIX: Get the FULL recipe data from database, not just the dropdown item
+                    var fullRecipe = DatabaseContext.GetRecipeById(selectedRecipe.Id);
+                    if (fullRecipe == null)
+                    {
+                        MessageBox.Show("Recipe not found in database.", "Error", 
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
 
+                    currentRecipe = fullRecipe;
+                    currentIngredients = fullRecipe.Ingredients ?? new List<RecipeIngredient>();
+
+                    // Update all UI controls
                     txtRecipeName.Text = currentRecipe.Name ?? "Unnamed Recipe";
                     txtBatchYield.Text = currentRecipe.BatchYield.ToString();
                     
-                    // Load category
+                    // Load target food cost
+                    var targetPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("F0") + "%";
+                    cmbFoodCost.SelectedItem = targetPercent;
+                    
+                    // Load category and tags
                     cmbCategory.Text = currentRecipe.Category ?? "";
+                    txtTags.Text = currentRecipe.Tags ?? "";
                     
-                    // Load tags - convert from comma-separated string to display format
-                    if (!string.IsNullOrEmpty(currentRecipe.Tags))
-                    {
-                        txtTags.Text = currentRecipe.Tags.Replace(",", ", ");
-                    }
-                    else
-                    {
-                        txtTags.Text = "";
-                    }
+                    // Load sales price
+                    txtSalesPrice.Text = currentRecipe.SalesPrice > 0 ? currentRecipe.SalesPrice.ToString("F2") : "0.00";
                     
-                    // Validate and fix food cost percentage if needed
-                    if (currentRecipe.TargetFoodCostPercentage <= 0 || currentRecipe.TargetFoodCostPercentage > 1)
-                    {
-                        currentRecipe.TargetFoodCostPercentage = 0.30m; // Default to 30%
-                    }
-                    
-                    var foodCostPercent = (currentRecipe.TargetFoodCostPercentage * 100).ToString("0");
-                    var matchingItem = cmbFoodCost.Items.Cast<string>()
-                        .FirstOrDefault(item => item.Replace("%", "") == foodCostPercent);
-                    
-                    if (matchingItem != null)
-                        cmbFoodCost.SelectedItem = matchingItem;
-                    else
-                        cmbFoodCost.SelectedIndex = 1; // Default to 30%
-                    
+                    // FIX: Refresh the ingredients grid
                     RefreshIngredientsGrid();
                     CalculateCost();
-                    UpdateRecipeCountDisplay();
                     
-                    // Enable version history button for loaded recipes
+                    // Enable version history
                     btnVersionHistory.Enabled = true;
+                    this.Text = $"Recipe Costing Calculator - {currentRecipe.Name}";
                     
-                    // Update duplicate checking
-                    CheckRecipeNameAvailability();
-                    
-                    // Show category and tags in status
-                    var categoryInfo = string.IsNullOrEmpty(currentRecipe.Category) ? "" : $" | Category: {currentRecipe.Category}";
-                    var tagsInfo = !string.IsNullOrEmpty(currentRecipe.Tags) ? $" | Tags: {currentRecipe.Tags}" : "";
-                    
-                    MessageBox.Show($"Loaded recipe: {currentRecipe.Name}{categoryInfo}{tagsInfo}\nIngredients loaded: {currentIngredients.Count}", "Success", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("Please select a valid recipe to load.", "Information", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Debug.WriteLine($"Loaded recipe: {currentRecipe.Name} with {currentIngredients.Count} ingredients");
                 }
             }
             catch (Exception ex)
@@ -102,22 +83,182 @@ namespace CostChef
             }
         }
 
-        private void InitializeNewRecipe()
+        private void AddIngredientToRecipe()
         {
-            currentRecipe = new Recipe { 
-                Name = "New Recipe", 
-                Category = "",
-                Tags = "",
-                BatchYield = 1, 
-                TargetFoodCostPercentage = 0.3m 
-            };
-            currentIngredients.Clear();
-            cmbCategory.Text = "";
-            txtTags.Text = "";
-            RefreshIngredientsGrid();
-            UpdateRecipeCountDisplay();
-            btnVersionHistory.Enabled = false; // Disable version history button for new recipes
-            CheckRecipeNameAvailability();
+            if (cmbIngredients.SelectedItem is Ingredient selectedIngredient && 
+                decimal.TryParse(txtQuantity.Text, out decimal quantity) && quantity > 0)
+            {
+                // Check if ingredient is already in the list
+                var existing = currentIngredients.FirstOrDefault(ri => ri.IngredientId == selectedIngredient.Id);
+
+                if (existing != null)
+                {
+                    existing.Quantity += quantity;
+                }
+                else
+                {
+                    currentIngredients.Add(new RecipeIngredient
+                    {
+                        IngredientId = selectedIngredient.Id,
+                        Quantity = quantity,
+                        IngredientName = selectedIngredient.Name,
+                        Unit = selectedIngredient.Unit,
+                        UnitPrice = selectedIngredient.UnitPrice,
+                        Supplier = selectedIngredient.SupplierName,
+                        YieldPercentage = selectedIngredient.YieldPercentage 
+                    });
+                }
+                
+                RefreshIngredientsGrid();
+                CalculateCost();
+            }
+            else
+            {
+                MessageBox.Show("Please select a valid ingredient and quantity.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RemoveIngredient()
+        {
+            if (dataGridViewIngredients.SelectedRows.Count > 0)
+            {
+                var selectedRow = dataGridViewIngredients.SelectedRows[0];
+                if (selectedRow.DataBoundItem is RecipeIngredient selectedIngredient)
+                {
+                    currentIngredients.Remove(selectedIngredient);
+                    RefreshIngredientsGrid();
+                    CalculateCost();
+                }
+            }
+        }
+        
+        private void RefreshIngredientsGrid() 
+        {
+            try
+            {
+                // Clear and reload grid.
+                var bindingSource = new BindingSource { DataSource = currentIngredients.ToList() };
+                dataGridViewIngredients.DataSource = bindingSource;
+                
+                // Force cost recalculation
+                CalculateCost();
+                btnVersionHistory.Enabled = currentRecipe.Id > 0;
+                
+                Debug.WriteLine($"Refreshed ingredients grid with {currentIngredients.Count} items");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error refreshing ingredients grid: {ex.Message}");
+            }
+        }
+
+        private void dataGridViewIngredients_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            // Logic to update ingredient quantity on cell edit
+            if (e.ColumnIndex == GetColumnIndex("Quantity") && e.RowIndex >= 0)
+            {
+                if (dataGridViewIngredients.Rows[e.RowIndex].DataBoundItem is RecipeIngredient ingredientToUpdate)
+                {
+                    if (decimal.TryParse(dataGridViewIngredients.Rows[e.RowIndex].Cells[e.ColumnIndex].Value?.ToString(), out decimal newQuantity))
+                    {
+                        UpdateIngredientQuantity(ingredientToUpdate, newQuantity);
+                    }
+                    else
+                    {
+                        // Revert change on invalid input
+                        dataGridViewIngredients.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = ingredientToUpdate.Quantity;
+                        MessageBox.Show("Invalid quantity entered.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            
+            CalculateCost();
+        }
+
+        private void UpdateIngredientQuantity(RecipeIngredient ingredient, decimal newQuantity)
+        {
+            var existing = currentIngredients.FirstOrDefault(ri => ri.IngredientId == ingredient.IngredientId);
+            if (existing != null)
+            {
+                existing.Quantity = newQuantity;
+                RefreshIngredientsGrid(); 
+            }
+        }
+
+        private int GetColumnIndex(string columnName)
+        {
+            if (dataGridViewIngredients.Columns.Contains(columnName))
+            {
+                return dataGridViewIngredients.Columns[columnName].Index;
+            }
+            return -1;
+        }
+
+        private void CalculateCost()
+        {
+            try
+            {
+                // Implementation: Calculate total cost and update summary label
+                decimal totalCost = currentIngredients.Sum(i => i.LineCost);
+                
+                int batchYield;
+                if (!int.TryParse(txtBatchYield.Text, out batchYield) || batchYield <= 0)
+                {
+                    batchYield = 1;
+                }
+                
+                decimal costPerServing = totalCost / batchYield;
+                
+                // Read target food cost
+                decimal targetFoodCost = 0.30m; // Default
+                if (cmbFoodCost.SelectedItem != null)
+                {
+                    var percent = cmbFoodCost.SelectedItem.ToString().Replace("%", "");
+                    if (decimal.TryParse(percent, out decimal foodCost))
+                    {
+                        targetFoodCost = foodCost / 100m;
+                    }
+                }
+                
+                // Read Sales Price from the current recipe object
+                decimal salesPrice = currentRecipe.SalesPrice; 
+
+                // Calculate suggested Sales Price based on Target Food Cost
+                decimal suggestedSalesPrice = targetFoodCost > 0 ? costPerServing / targetFoodCost : 0;
+                
+                // Update the current recipe object for saving
+                currentRecipe.Ingredients = currentIngredients.ToList();
+                currentRecipe.BatchYield = batchYield;
+                currentRecipe.TargetFoodCostPercentage = targetFoodCost;
+                
+                // Compute current profitability
+                decimal profitPerServing = salesPrice - costPerServing;
+                decimal profitMargin = salesPrice > 0 ? (profitPerServing / salesPrice) : 0;
+                decimal actualFoodCostPercentage = salesPrice > 0 ? (costPerServing / salesPrice) : 0;
+                
+                // Create Summary Text
+                StringBuilder summary = new StringBuilder();
+                summary.AppendLine($"Total Ingredient Cost: {AppSettings.FormatCurrency(totalCost)}");
+                summary.AppendLine($"Cost Per Serving ({batchYield} yield): {AppSettings.FormatCurrency(costPerServing)}");
+                summary.AppendLine($"Actual Food Cost %: {actualFoodCostPercentage * 100:F1}%");
+                summary.AppendLine("--------------------------------------------------");
+                summary.AppendLine($"Target Food Cost: {targetFoodCost * 100:F1}%");
+                summary.AppendLine($"Suggested Sales Price (at Target FC): {AppSettings.FormatCurrency(suggestedSalesPrice)}");
+                
+                if (salesPrice > 0)
+                {
+                    summary.AppendLine($"Current Sales Price: {AppSettings.FormatCurrency(salesPrice)}");
+                    summary.AppendLine($"Profit Per Serving: {AppSettings.FormatCurrency(profitPerServing)}");
+                    summary.AppendLine($"Profit Margin: {profitMargin * 100:F1}%");
+                }
+                                
+                lblCostSummary.Text = summary.ToString();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error calculating cost: {ex.Message}");
+                lblCostSummary.Text = "Error calculating cost. Please check your inputs.";
+            }
         }
 
         private void LoadExistingRecipes()
@@ -125,295 +266,77 @@ namespace CostChef
             try
             {
                 allRecipes = DatabaseContext.GetAllRecipes();
+                cmbExistingRecipes.DataSource = null; // Clear first
+                cmbExistingRecipes.DataSource = allRecipes.ToList(); 
+                cmbExistingRecipes.DisplayMember = "Name";
+                cmbExistingRecipes.ValueMember = "Id";
                 
-                cmbExistingRecipes.DataSource = null;
-                cmbExistingRecipes.Items.Clear();
-                
-                if (allRecipes != null && allRecipes.Count > 0)
-                {
-                    var displayRecipes = allRecipes
-                        .Where(r => !string.IsNullOrEmpty(r.Name))
-                        .OrderBy(r => r.Name)
-                        .ToList();
-                    
-                    cmbExistingRecipes.DataSource = displayRecipes;
-                    cmbExistingRecipes.DisplayMember = "Name";
-                    cmbExistingRecipes.ValueMember = "Id";
-                    
-                    if (cmbExistingRecipes.SelectedIndex == -1 && cmbExistingRecipes.Items.Count > 0)
-                    {
-                        cmbExistingRecipes.SelectedIndex = 0;
-                    }
-                }
-                else
-                {
-                    cmbExistingRecipes.Text = "No recipes available";
-                }
-                
-                UpdateRecipeCountDisplay();
-                
-                // Refresh duplicate checking after loading recipes
-                CheckRecipeNameAvailability();
+                Debug.WriteLine($"Loaded {allRecipes.Count} recipes into dropdown");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading recipes: {ex.Message}", "Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
-                cmbExistingRecipes.Text = "Error loading recipes";
             }
-        }
-
-        private void UpdateRecipeCountDisplay()
-        {
-            int totalRecipes = allRecipes?.Count ?? 0;
-            int currentIngredientCount = currentIngredients?.Count ?? 0;
-            
-            this.Text = $"Recipe Costing Calculator - {totalRecipes} recipes, {currentIngredientCount} ingredients in current recipe";
-        }
-
-        private void ClearSearch()
-        {
-            txtSearchRecipes.Text = "";
-            LoadExistingRecipes();
-            lblExistingRecipes.Text = "Load Recipe:";
         }
 
         private void SearchRecipes()
         {
-            try
+            var searchText = txtSearchRecipes.Text.Trim().ToLower();
+            var filtered = allRecipes.Where(r => 
+                r.Name.ToLower().Contains(searchText) ||
+                (r.Tags ?? "").ToLower().Contains(searchText) ||
+                (r.Category ?? "").ToLower().Contains(searchText)
+            ).ToList();
+
+            cmbExistingRecipes.DataSource = filtered;
+            cmbExistingRecipes.DisplayMember = "Name";
+            cmbExistingRecipes.ValueMember = "Id";
+        }
+
+        private void ClearSearch()
+        {
+            txtSearchRecipes.Text = string.Empty;
+            LoadExistingRecipes();
+        }
+
+        private void UpdateUnitDisplay()
+        {
+            if (cmbIngredients.SelectedItem is Ingredient selectedIngredient)
             {
-                var searchTerm = txtSearchRecipes.Text.Trim().ToLowerInvariant();
-                
-                if (string.IsNullOrEmpty(searchTerm))
-                {
-                    LoadExistingRecipes();
-                    return;
-                }
-
-                var allRecipes = DatabaseContext.GetAllRecipes();
-                var filteredRecipes = allRecipes
-                    .Where(recipe =>
-                        (recipe.Name ?? "").ToLowerInvariant().Contains(searchTerm) ||
-                        (recipe.Category ?? "").ToLowerInvariant().Contains(searchTerm) ||
-                        ((recipe.Tags ?? "").ToLowerInvariant().Contains(searchTerm))
-                    )
-                    .OrderBy(r => r.Name)
-                    .ToList();
-
-                cmbExistingRecipes.DataSource = null;
-                cmbExistingRecipes.Items.Clear();
-                
-                if (filteredRecipes.Count > 0)
-                {
-                    cmbExistingRecipes.DataSource = filteredRecipes;
-                    cmbExistingRecipes.DisplayMember = "Name";
-                    cmbExistingRecipes.ValueMember = "Id";
-                    
-                    lblExistingRecipes.Text = $"Search Results ({filteredRecipes.Count} recipes):";
-                }
-                else
-                {
-                    cmbExistingRecipes.Text = "No recipes found";
-                    lblExistingRecipes.Text = "Search Results (0 recipes):";
-                }
+                lblUnitDisplay.Text = selectedIngredient.Unit ?? "grams";
             }
-            catch (Exception ex)
+            else
             {
-                MessageBox.Show($"Error searching recipes: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblUnitDisplay.Text = "grams"; // Default unit
             }
         }
 
-        private void LoadIngredientsComboBox()
+        private void DeleteRecipe()
         {
-            try
+            if (currentRecipe.Id == 0)
             {
-                var ingredients = DatabaseContext.GetAllIngredients();
-                if (ingredients != null && ingredients.Count > 0)
-                {
-                    cmbIngredients.DataSource = ingredients;
-                    cmbIngredients.DisplayMember = "Name";
-                    cmbIngredients.ValueMember = "Id";
-                    
-                    // Set initial unit display
-                    UpdateUnitDisplay();
-                }
-                else
-                {
-                    cmbIngredients.Text = "No ingredients available";
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading ingredients: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-       // In RecipesForm.Logic.cs - Update AddIngredientToRecipe method
-private void AddIngredientToRecipe()
-{
-    if (cmbIngredients.SelectedItem is Ingredient selectedIngredient && 
-        decimal.TryParse(txtQuantity.Text, out decimal quantity))
-    {
-        var recipeIngredient = new RecipeIngredient
-        {
-            IngredientId = selectedIngredient.Id,
-            Quantity = quantity,
-            IngredientName = selectedIngredient.Name,
-            Unit = selectedIngredient.Unit,
-            UnitPrice = selectedIngredient.UnitPrice,
-            Supplier = selectedIngredient.SupplierName,
-            YieldPercentage = selectedIngredient.YieldPercentage // NEW: Store yield at recipe creation
-        };
-
-        currentIngredients.Add(recipeIngredient);
-        RefreshIngredientsGrid();
-        CalculateCost();
-        UpdateRecipeCountDisplay();
-        
-        // Create version when ingredient is added
-        if (currentRecipe.Id > 0)
-        {
-            CreateVersionForChange($"Added {quantity} {selectedIngredient.Unit} of {selectedIngredient.Name}");
-        }
-        
-        txtQuantity.Text = "100";
-        UpdateUnitDisplay();
-    }
-    else
-    {
-        MessageBox.Show("Please enter a valid quantity.", "Error", 
-            MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
-}
-
-        private void RemoveIngredient()
-        {
-            if (dataGridViewIngredients.SelectedRows.Count > 0)
-            {
-                var selected = (RecipeIngredient)dataGridViewIngredients.SelectedRows[0].DataBoundItem;
-                currentIngredients.Remove(selected);
-                RefreshIngredientsGrid();
-                CalculateCost();
-                UpdateRecipeCountDisplay();
-                
-                // Create version when ingredient is removed
-                if (currentRecipe.Id > 0)
-                {
-                    CreateVersionForChange($"Removed {selected.IngredientName}");
-                }
-            }
-        }
-
-        private void RefreshIngredientsGrid()
-        {
-            try
-            {
-                dataGridViewIngredients.SuspendLayout();
-                dataGridViewIngredients.DataSource = null;
-                dataGridViewIngredients.DataSource = currentIngredients.ToList();
-                
-                // Auto-size columns for better display
-                dataGridViewIngredients.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
-                dataGridViewIngredients.ResumeLayout();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error refreshing ingredients grid: {ex.Message}", "Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void dataGridViewIngredients_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.ColumnIndex == GetColumnIndex("Quantity") && e.RowIndex >= 0)
-            {
-                UpdateIngredientQuantity(e.RowIndex);
-            }
-        }
-
-        private int GetColumnIndex(string columnName)
-        {
-            foreach (DataGridViewColumn column in dataGridViewIngredients.Columns)
-            {
-                if (column.HeaderText == columnName)
-                    return column.Index;
-            }
-            return -1;
-        }
-
-        private void UpdateIngredientQuantity(int rowIndex)
-        {
-            if (rowIndex < currentIngredients.Count)
-            {
-                var row = dataGridViewIngredients.Rows[rowIndex];
-                var ingredient = currentIngredients[rowIndex];
-                
-                if (row.Cells["Quantity"].Value != null && 
-                    decimal.TryParse(row.Cells["Quantity"].Value.ToString(), out decimal newQuantity))
-                {
-                    var oldQuantity = ingredient.Quantity;
-                    ingredient.Quantity = newQuantity;
-                    
-                    // Create version when quantity changes significantly
-                    if (currentRecipe.Id > 0 && Math.Abs(oldQuantity - newQuantity) > 0.1m)
-                    {
-                        CreateVersionForChange($"Changed {ingredient.IngredientName} quantity from {oldQuantity} to {newQuantity} {ingredient.Unit}");
-                    }
-                    
-                    this.BeginInvoke(new Action(() =>
-                    {
-                        RefreshIngredientsGrid();
-                        CalculateCost();
-                    }));
-                }
-            }
-        }
-
-        private void CalculateCost()
-        {
-            if (currentIngredients.Count == 0)
-            {
-                lblCostSummary.Text = "Add ingredients to calculate cost...";
+                MessageBox.Show("No recipe is currently loaded.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            decimal totalCost = currentIngredients.Sum(i => i.LineCost);
-            decimal costPerServing = currentRecipe.BatchYield > 0 ? totalCost / currentRecipe.BatchYield : totalCost;
+            var result = MessageBox.Show($"Are you sure you want to delete the recipe '{currentRecipe.Name}'?", "Confirm Delete", 
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
-            // Calculate suggested prices
-            decimal suggestedPrice25 = costPerServing > 0 ? Math.Round((costPerServing / 0.25m) / 5, 0) * 5 : 0;
-            decimal suggestedPrice30 = costPerServing > 0 ? Math.Round((costPerServing / 0.30m) / 5, 0) * 5 : 0;
-            decimal suggestedPrice35 = costPerServing > 0 ? Math.Round((costPerServing / 0.35m) / 5, 0) * 5 : 0;
-            
-            // Ensure target food cost percentage is valid and calculate target price
-            decimal targetPrice = 0;
-            decimal targetFoodCostPercentage = currentRecipe.TargetFoodCostPercentage;
-            
-            // Validate and fix the target food cost percentage if needed
-            if (targetFoodCostPercentage <= 0 || targetFoodCostPercentage > 1)
+            if (result == DialogResult.Yes)
             {
-                // Default to 30% if invalid
-                targetFoodCostPercentage = 0.30m;
-                currentRecipe.TargetFoodCostPercentage = targetFoodCostPercentage;
+                DatabaseContext.DeleteRecipe(currentRecipe.Id);
+                LoadExistingRecipes();
+                InitializeNewRecipe(); // Reset form
+                MessageBox.Show("Recipe deleted successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            
-            if (costPerServing > 0 && targetFoodCostPercentage > 0)
-            {
-                targetPrice = Math.Round((costPerServing / targetFoodCostPercentage) / 5, 0) * 5;
-            }
-
-            // Format the percentage correctly (0.30 becomes 30%, not 3000%)
-            string foodCostPercentDisplay = (targetFoodCostPercentage * 100).ToString("0") + "%";
-
-            // Using regular string concatenation to avoid any verbatim string issues
-            string summary = "Recipe: " + currentRecipe.Name + Environment.NewLine +
-                            "Total Cost: " + currencySymbol + totalCost.ToString("F2") + " | Cost per Serving: " + currencySymbol + costPerServing.ToString("F2") + Environment.NewLine +
-                            "Suggested Prices: 25%: " + currencySymbol + suggestedPrice25 + " | 30%: " + currencySymbol + suggestedPrice30 + " | 35%: " + currencySymbol + suggestedPrice35 + Environment.NewLine +
-                            "Target Price (" + foodCostPercentDisplay + "): " + currencySymbol + targetPrice;
-
-            lblCostSummary.Text = summary;
+        }
+        
+        private void LoadRecipeIngredients(List<RecipeIngredient> ingredients)
+        {
+            // Sets up the DataGridView DataSource
+            currentIngredients = ingredients.ToList();
+            RefreshIngredientsGrid();
         }
     }
 }

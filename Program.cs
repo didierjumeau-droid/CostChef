@@ -27,7 +27,9 @@ namespace CostChef
             {
                 if (splashScreen.ShowDialog() == DialogResult.OK)
                 {
-                    // Splash screen completed, start main application
+   // ADD THIS LINE - Fix database schema before starting the app
+            DatabaseSchemaFix.CheckAndFixSchema();                   
+ // Splash screen completed, start main application
                     Application.Run(new MainForm());
                 }
             }

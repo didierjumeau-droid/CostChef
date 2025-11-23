@@ -1,0 +1,244 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using CostChef.Data;
+using CostChef.Models;
+
+namespace CostChef.Services
+{
+    public static class RecipeCsvService
+    {
+        // ---- Public API -----------------------------------------------------
+
+        public static Recipe? ImportRecipe(string path)
+        {
+            if (!File.Exists(path))
+                throw new FileNotFoundException(path);
+
+            var lines = File.ReadAllLines(path);
+            var (recipe, items) = ParseRecipe(lines);
+
+            recipe.Items = items ?? new List<RecipeItem>();
+
+            // Compute costs from Ingredients repo
+            ComputeItemCosts(recipe);
+
+            return recipe;
+        }
+
+        public static void ExportRecipe(string path, Recipe recipe)
+        {
+            // Recompute before export (in case prices changed)
+            ComputeItemCosts(recipe);
+
+            using var sw = new StreamWriter(path, false);
+            sw.WriteLine("[RECIPE]");
+            sw.WriteLine($"Name,{Escape(recipe.Name)}");
+            sw.WriteLine($"PortionName,{Escape(recipe.PortionName)}");
+            sw.WriteLine($"Portions,{recipe.Portions}");
+            sw.WriteLine();
+
+            sw.WriteLine("[ITEMS]");
+            sw.WriteLine("Ingredient,Qty,Unit,Cost_PHP");
+            foreach (var it in recipe.Items)
+            {
+                sw.WriteLine($"{Escape(it.Ingredient)},{it.Qty.ToString(CI)},{Escape(it.Unit)},{(it.Cost_PHP?.ToString(CI) ?? "")}");
+            }
+
+            sw.WriteLine();
+            sw.WriteLine($"TotalCost_PHP,{recipe.TotalCost_PHP.ToString(CI)}");
+        }
+
+        public static void WriteRecipeTemplate(string path, string defaultName = "My Dish")
+        {
+            using var sw = new StreamWriter(path, false);
+            sw.WriteLine("[RECIPE]");
+            sw.WriteLine($"Name,{Escape(defaultName)}");
+            sw.WriteLine("PortionName,serving");
+            sw.WriteLine("Portions,1");
+            sw.WriteLine();
+            sw.WriteLine("[ITEMS]");
+            sw.WriteLine("Ingredient,Qty,Unit");
+            sw.WriteLine("Butter,50,gram");
+            sw.WriteLine("Onion,200,gram");
+        }
+
+        // ---- Internal helpers ----------------------------------------------
+
+        private static (Recipe recipe, List<RecipeItem> items) ParseRecipe(string[] lines)
+        {
+            int i = 0;
+            SkipBlanks(lines, ref i);
+
+            if (i >= lines.Length || !IsSection(lines[i], "RECIPE"))
+                throw new InvalidDataException("Recipe CSV missing required section markers.");
+
+            var recipe = new Recipe();
+
+            // [RECIPE] section
+            i++;
+            for (; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+                if (IsSection(line, "ITEMS")) break;
+
+                var parts = SplitCsvLine(line);
+                if (parts.Length < 2) continue;
+
+                var key = parts[0].Trim().ToLowerInvariant();
+                var val = parts[1].Trim();
+
+                switch (key)
+                {
+                    case "name":         recipe.Name = val; break;
+                    case "portionname":  recipe.PortionName = val; break;
+                    case "portions":
+                        if (int.TryParse(val, NumberStyles.Integer, CI, out var p)) recipe.Portions = p;
+                        break;
+                }
+            }
+
+            if (i >= lines.Length || !IsSection(lines[i], "ITEMS"))
+                throw new InvalidDataException("Recipe CSV missing required section markers.");
+
+            // [ITEMS] section header
+            i++;
+            if (i >= lines.Length)
+                return (recipe, new List<RecipeItem>());
+
+            // Read header
+            var header = SplitCsvLine(lines[i]);
+            var map = new HeaderMap(header);
+            i++;
+
+            var items = new List<RecipeItem>();
+            for (; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+                if (line.StartsWith("[", StringComparison.Ordinal)) break;
+
+                var cols = SplitCsvLine(line);
+                if (cols.Length == 0) continue;
+
+                var item = new RecipeItem
+                {
+                    Ingredient = map.Get(cols, "ingredient") ?? "",
+                    Unit       = map.Get(cols, "unit") ?? ""
+                };
+
+                var qtyStr = map.Get(cols, "qty");
+                if (qtyStr != null && double.TryParse(qtyStr, NumberStyles.Float, CI, out var q))
+                    item.Qty = q;
+
+                // Cost_PHP column is optional in input; will be recomputed
+                items.Add(item);
+            }
+
+            return (recipe, items);
+        }
+
+        private static void ComputeItemCosts(Recipe recipe)
+        {
+            // IMPORTANT: Ingredient model uses IngredientName (not Ingredient)
+            var priceByName = IngredientRepository
+                .GetAll()
+                .GroupBy(x => x.IngredientName?.Trim().ToLowerInvariant() ?? "")
+                .ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var it in recipe.Items)
+            {
+                it.Cost_PHP = null;
+
+                var key = (it.Ingredient ?? "").Trim().ToLowerInvariant();
+                if (!priceByName.TryGetValue(key, out var ing)) continue;
+
+                // Simple demo rule: we assume units match; if not, cost is left null
+                if (!string.IsNullOrWhiteSpace(ing.Unit) &&
+                    !string.IsNullOrWhiteSpace(it.Unit) &&
+                    !UnitsEqual(ing.Unit, it.Unit))
+                {
+                    continue; // unit mismatch – skip (we can add a converter later)
+                }
+
+                if (ing.UnitPricePhp.HasValue)
+                {
+                    var qtyDec = (decimal)it.Qty;
+                    it.Cost_PHP = qtyDec * ing.UnitPricePhp.Value;
+                }
+            }
+
+            // Sum total (ignore nulls)
+            recipe.TotalCost_PHP = recipe.Items?.Where(x => x.Cost_PHP.HasValue).Sum(x => x.Cost_PHP!.Value) ?? 0m;
+        }
+
+        private static bool UnitsEqual(string a, string b) =>
+            string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsSection(string line, string name) =>
+            line.Trim().Equals($"[{name}]", StringComparison.OrdinalIgnoreCase);
+
+        private static void SkipBlanks(string[] lines, ref int i)
+        {
+            while (i < lines.Length && string.IsNullOrWhiteSpace(lines[i])) i++;
+        }
+
+        private static string Escape(string s)
+        {
+            if (s.Contains('"') || s.Contains(',') || s.Contains('\n') || s.Contains('\r'))
+                return $"\"{s.Replace("\"", "\"\"")}\"";
+            return s;
+        }
+
+        private static string[] SplitCsvLine(string line)
+        {
+            var list = new List<string>();
+            bool inQ = false;
+            var cur = new System.Text.StringBuilder();
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                var ch = line[i];
+                if (inQ)
+                {
+                    if (ch == '"')
+                    {
+                        if (i + 1 < line.Length && line[i + 1] == '"') { cur.Append('"'); i++; }
+                        else inQ = false;
+                    }
+                    else cur.Append(ch);
+                }
+                else
+                {
+                    if (ch == ',') { list.Add(cur.ToString()); cur.Clear(); }
+                    else if (ch == '"') inQ = true;
+                    else cur.Append(ch);
+                }
+            }
+            list.Add(cur.ToString());
+            return list.ToArray();
+        }
+
+        private static readonly CultureInfo CI = CultureInfo.InvariantCulture;
+
+        private sealed class HeaderMap
+        {
+            private readonly Dictionary<string, int> _ix;
+
+            public HeaderMap(string[] header)
+            {
+                _ix = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; i++)
+                    _ix[header[i].Trim()] = i;
+            }
+
+            public string? Get(string[] row, string name)
+            {
+                return _ix.TryGetValue(name, out var i) && i < row.Length ? row[i] : null;
+            }
+        }
+    }
+}

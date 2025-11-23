@@ -73,7 +73,8 @@ namespace CostChef
                         Category = record.Category,
                         Tags = record.Tags,
                         BatchYield = int.TryParse(record.BatchYield?.ToString(), out int yield) ? yield : 1,
-                        TargetFoodCostPercentage = decimal.TryParse(record.TargetFoodCostPercentage?.ToString(), out decimal cost) ? cost : 30.0m
+                        // FIX: Corrected default food cost percentage value from 30.0m to 0.30m for decimal representation
+                        TargetFoodCostPercentage = decimal.TryParse(record.TargetFoodCostPercentage?.ToString(), out decimal cost) ? cost : 0.30m
                     });
                 }
 
