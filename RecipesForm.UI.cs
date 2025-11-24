@@ -313,7 +313,7 @@ namespace CostChef
             this.PerformLayout();
         }
 
-     private void ConfigureIngredientsGrid()
+    private void ConfigureIngredientsGrid()
 {
     try
     {
@@ -346,16 +346,20 @@ namespace CostChef
             ReadOnly = false
         };
 
-        // Unit
+        // Unit  ➜ right-aligned
         var colUnit = new DataGridViewTextBoxColumn
         {
             Name = "Unit",
             HeaderText = "Unit",
             DataPropertyName = "Unit",
-            ReadOnly = true
+            ReadOnly = true,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                Alignment = DataGridViewContentAlignment.MiddleRight
+            }
         };
 
-        // Unit price – currency formatted with app symbol
+        // Unit price – currency formatted with app symbol, 2 decimals, right-aligned
         var colUnitPrice = new DataGridViewTextBoxColumn
         {
             Name = "UnitPrice",
@@ -364,7 +368,7 @@ namespace CostChef
             ReadOnly = true,
             DefaultCellStyle = new DataGridViewCellStyle
             {
-                Format = "C4",
+                Format = "C2",                  // was "C4"
                 FormatProvider = currencyFormat,
                 Alignment = DataGridViewContentAlignment.MiddleRight
             }
@@ -404,7 +408,6 @@ namespace CostChef
             colSupplier
         });
 
-        // Data source will provide IDs etc., but grid won't auto-generate extra columns
         dataGridViewIngredients.AutoGenerateColumns = false;
     }
     catch (Exception ex)
@@ -413,6 +416,7 @@ namespace CostChef
             MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 }
+
 
 
     }

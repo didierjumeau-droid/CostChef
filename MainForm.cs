@@ -14,6 +14,7 @@ namespace CostChef
         private Button btnSupplierReports;
         private Button btnPriceHistory;
         private Button btnInventory;
+        private Button btnMenuProfitability;   // ✅ NEW
         private Label lblTitle;
         private Label lblSubtitle;
 
@@ -36,12 +37,13 @@ namespace CostChef
             this.btnSupplierReports = new Button();
             this.btnPriceHistory = new Button();
             this.btnInventory = new Button();
+            this.btnMenuProfitability = new Button();  // ✅ NEW
             this.lblTitle = new Label();
             this.lblSubtitle = new Label();
 
             // Main Form
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(400, 550);
+            this.ClientSize = new System.Drawing.Size(400, 580);
             this.Text = "CostChef - Menu Costing & Inventory";
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -83,14 +85,9 @@ namespace CostChef
             this.btnSupplierManagement.Text = "🏪 Manage Suppliers";
             this.btnSupplierManagement.Click += new EventHandler(this.btnSupplierManagement_Click);
 
-            // btnImportExport
-            this.btnImportExport.Location = new System.Drawing.Point(80, 270);
-            this.btnImportExport.Size = new System.Drawing.Size(240, 40);
-            this.btnImportExport.Text = "📤 Import / Export Data";
-            this.btnImportExport.Click += new EventHandler(this.btnImportExport_Click);
-
+           
             // btnSupplierReports
-            this.btnSupplierReports.Location = new System.Drawing.Point(80, 320);
+            this.btnSupplierReports.Location = new System.Drawing.Point(80, 270);
             this.btnSupplierReports.Size = new System.Drawing.Size(240, 40);
             this.btnSupplierReports.Text = "📊 Supplier Reports";
             this.btnSupplierReports.Click += new EventHandler(this.btnSupplierReports_Click);
@@ -101,14 +98,26 @@ namespace CostChef
             this.btnPriceHistory.Text = "📈 Price History";
             this.btnPriceHistory.Click += new EventHandler(this.btnPriceHistory_Click);
 
-            // ✅ NEW: Inventory button
-            this.btnInventory.Location = new System.Drawing.Point(80, 420);
+            // ✅ NEW: Menu Profitability Button
+            this.btnMenuProfitability.Location = new System.Drawing.Point(80, 420);
+            this.btnMenuProfitability.Size = new System.Drawing.Size(240, 40);
+            this.btnMenuProfitability.Text = "📊 Menu Profitability";
+            this.btnMenuProfitability.Click += new EventHandler(this.btnMenuProfitability_Click);
+
+            // ✅ Inventory button (shifted down)
+            this.btnInventory.Location = new System.Drawing.Point(80, 320);
             this.btnInventory.Size = new System.Drawing.Size(240, 40);
-            this.btnInventory.Text = "📦 Inventory";
+            this.btnInventory.Text = "📦 Inventory Management";
             this.btnInventory.Click += new EventHandler(this.btnInventory_Click);
 
-            // btnExit
-            this.btnExit.Location = new System.Drawing.Point(80, 470);
+ // btnImportExport
+            this.btnImportExport.Location = new System.Drawing.Point(80, 470);
+            this.btnImportExport.Size = new System.Drawing.Size(240, 40);
+            this.btnImportExport.Text = "📤 Import / Export Data";
+            this.btnImportExport.Click += new EventHandler(this.btnImportExport_Click);
+
+            // btnExit (shifted down)
+            this.btnExit.Location = new System.Drawing.Point(80, 520);
             this.btnExit.Size = new System.Drawing.Size(240, 40);
             this.btnExit.Text = "Exit";
             this.btnExit.Click += new EventHandler(this.btnExit_Click);
@@ -137,6 +146,7 @@ namespace CostChef
             this.Controls.Add(this.btnImportExport);
             this.Controls.Add(this.btnSupplierReports);
             this.Controls.Add(this.btnPriceHistory);
+            this.Controls.Add(this.btnMenuProfitability);  // ✅ NEW
             this.Controls.Add(this.btnInventory);
             this.Controls.Add(this.btnExit);
             this.Controls.Add(this.btnSettings);
@@ -183,7 +193,15 @@ namespace CostChef
             priceHistoryForm.ShowDialog();
         }
 
-        // ✅ NEW: Inventory click handler
+        private void btnMenuProfitability_Click(object sender, EventArgs e)
+        {
+            using (var f = new MenuProfitabilityForm())
+            {
+                f.ShowDialog();
+            }
+        }
+
+        // Inventory click handler
         private void btnInventory_Click(object sender, EventArgs e)
         {
             var inventoryForm = new InventoryForm();

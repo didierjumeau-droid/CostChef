@@ -16,13 +16,14 @@ namespace CostChef
         private Label lblTitle;
         private ComboBox cmbSortBy;
         private ComboBox cmbCategoryFilter;
+        private Label lblSortBy;
+        private Label lblCategoryFilter;
         private Label lblSummary;
         private Button btnOpenRecipe;
 
         public RecipeProfitabilityForm()
         {
-            // FIX: InitializeComponent was missing
-            InitializeComponent(); 
+            InitializeComponent();
             LoadRecipeData();
         }
 
@@ -32,13 +33,15 @@ namespace CostChef
             this.btnClose = new Button();
             this.btnRefresh = new Button();
             this.btnExport = new Button();
+            this.btnOpenRecipe = new Button();
             this.lblTitle = new Label();
             this.cmbSortBy = new ComboBox();
             this.cmbCategoryFilter = new ComboBox();
+            this.lblSortBy = new Label();
+            this.lblCategoryFilter = new Label();
             this.lblSummary = new Label();
-            this.btnOpenRecipe = new Button();
 
-            // Recipe Profitability Form
+            // Form
             this.SuspendLayout();
             this.ClientSize = new System.Drawing.Size(1000, 600);
             this.Text = "Recipe Profitability Dashboard - CostChef v3.0";
@@ -57,11 +60,11 @@ namespace CostChef
             this.cmbSortBy.Location = new System.Drawing.Point(20, 60);
             this.cmbSortBy.Size = new System.Drawing.Size(200, 21);
             this.cmbSortBy.DropDownStyle = ComboBoxStyle.DropDownList;
-            this.cmbSortBy.Items.AddRange(new object[] { 
-                "Profit Margin (High to Low)", 
-                "Profit Margin (Low to High)", 
-                "Food Cost % (High to Low)", 
-                "Profit Amount" 
+            this.cmbSortBy.Items.AddRange(new object[] {
+                "Profit Margin (High to Low)",
+                "Profit Margin (Low to High)",
+                "Food Cost % (High to Low)",
+                "Profit Amount"
             });
             this.cmbSortBy.SelectedIndex = 0;
             this.cmbSortBy.SelectedIndexChanged += (s, e) => RefreshRecipeGrid();
@@ -71,7 +74,7 @@ namespace CostChef
             this.cmbCategoryFilter.Size = new System.Drawing.Size(150, 21);
             this.cmbCategoryFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             this.cmbCategoryFilter.SelectedIndexChanged += (s, e) => RefreshRecipeGrid();
-            
+
             // lblSummary
             this.lblSummary.Location = new System.Drawing.Point(20, 95);
             this.lblSummary.Size = new System.Drawing.Size(960, 25);
@@ -85,14 +88,15 @@ namespace CostChef
             this.dataGridViewRecipes.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             this.dataGridViewRecipes.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             this.dataGridViewRecipes.ReadOnly = true;
-            this.dataGridViewRecipes.Columns.AddRange(new DataGridViewColumn[] 
+            this.dataGridViewRecipes.AutoGenerateColumns = false;
+            this.dataGridViewRecipes.Columns.AddRange(new DataGridViewColumn[]
             {
                 new DataGridViewTextBoxColumn { Name = "RecipeName", HeaderText = "Recipe", DataPropertyName = "RecipeName" },
                 new DataGridViewTextBoxColumn { Name = "Category", HeaderText = "Category", DataPropertyName = "Category" },
                 new DataGridViewTextBoxColumn { Name = "CostPerServing", HeaderText = "Cost/Unit", DataPropertyName = "CostPerServing", DefaultCellStyle = new DataGridViewCellStyle { Format = "C2" } },
-                new DataGridViewTextBoxColumn { Name = "SalesPrice", HeaderText = "Sales Price", DataPropertyName = "SalesPrice", DefaultCellStyle = new DataGridViewCellStyle { Format = "C2" } },
-                new DataGridViewTextBoxColumn { Name = "ProfitMargin", HeaderText = "Profit Margin", DataPropertyName = "ProfitMargin", DefaultCellStyle = new DataGridViewCellStyle { Format = "P1" } },
-                new DataGridViewTextBoxColumn { Name = "FoodCostPercentage", HeaderText = "FC %", DataPropertyName = "FoodCostPercentage", DefaultCellStyle = new DataGridViewCellStyle { Format = "F1" } },
+                new DataGridViewTextBoxColumn { Name = "SalesPrice", HeaderText = "Price", DataPropertyName = "SalesPrice", DefaultCellStyle = new DataGridViewCellStyle { Format = "C2" } },
+                new DataGridViewTextBoxColumn { Name = "ProfitMargin", HeaderText = "Margin %", DataPropertyName = "ProfitMargin", DefaultCellStyle = new DataGridViewCellStyle { Format = "P1" } },
+                new DataGridViewTextBoxColumn { Name = "FoodCostPercentage", HeaderText = "Food Cost %", DataPropertyName = "FoodCostPercentage", DefaultCellStyle = new DataGridViewCellStyle { Format = "F1" } },
                 new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status" },
                 new DataGridViewTextBoxColumn { Name = "RecipeId", HeaderText = "ID", DataPropertyName = "RecipeId", Visible = false }
             });
@@ -121,31 +125,52 @@ namespace CostChef
             this.btnClose.Text = "Close";
             this.btnClose.Click += new EventHandler(this.btnClose_Click);
 
-            // Add controls to form
-            this.Controls.AddRange(new Control[] {
-                lblTitle, cmbSortBy, cmbCategoryFilter, lblSummary, 
-                dataGridViewRecipes, btnOpenRecipe, btnRefresh, btnExport, btnClose
-            });
+            // lblSortBy
+            this.lblSortBy.AutoSize = true;
+            this.lblSortBy.Location = new System.Drawing.Point(20, 45);
+            this.lblSortBy.Text = "Sort by:";
+
+            // lblCategoryFilter
+            this.lblCategoryFilter.AutoSize = true;
+            this.lblCategoryFilter.Location = new System.Drawing.Point(230, 45);
+            this.lblCategoryFilter.Text = "Category:";
+
+            // Add controls
+            this.Controls.Add(this.lblTitle);
+            this.Controls.Add(this.lblSortBy);
+            this.Controls.Add(this.cmbSortBy);
+            this.Controls.Add(this.lblCategoryFilter);
+            this.Controls.Add(this.cmbCategoryFilter);
+            this.Controls.Add(this.lblSummary);
+            this.Controls.Add(this.dataGridViewRecipes);
+            this.Controls.Add(this.btnOpenRecipe);
+            this.Controls.Add(this.btnRefresh);
+            this.Controls.Add(this.btnExport);
+            this.Controls.Add(this.btnClose);
 
             this.ResumeLayout(false);
-            this.PerformLayout();
         }
 
         private void LoadRecipeData()
         {
             try
             {
+                // Load categories for filter
                 var categories = DatabaseContext.GetRecipeCategories();
                 cmbCategoryFilter.Items.Clear();
                 cmbCategoryFilter.Items.Add("All Categories");
-                cmbCategoryFilter.Items.AddRange(categories.Cast<object>().ToArray());
+                foreach (var category in categories)
+                {
+                    cmbCategoryFilter.Items.Add(category);
+                }
                 cmbCategoryFilter.SelectedIndex = 0;
 
+                // Initial load
                 RefreshRecipeGrid();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading recipe data: {ex.Message}", "Error", 
+                MessageBox.Show($"Error loading recipe data: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -153,10 +178,10 @@ namespace CostChef
         private void RefreshRecipeGrid()
         {
             // FIX: Set required default values for the filtering parameters
-            decimal minProfit = 0m; 
-            decimal maxFoodCost = 1.0m; 
-            decimal minProfitMargin = 0m; 
-            
+            decimal minProfit = 0m;
+            decimal maxFoodCost = 1.0m;
+            decimal minProfitMargin = 0m;
+
             List<Recipe> recipes = DatabaseContext.GetAllRecipes();
             string sortOption = cmbSortBy.SelectedItem?.ToString() ?? "Profit Margin (High to Low)";
             string filterCategory = cmbCategoryFilter.SelectedItem?.ToString() ?? "All Categories";
@@ -164,9 +189,9 @@ namespace CostChef
             // Apply DB filtering based on sort option
             if (sortOption.Contains("Profit Amount"))
             {
-                recipes = DatabaseContext.GetRecipesByProfitAmount(minProfit); 
+                recipes = DatabaseContext.GetRecipesByProfitAmount(minProfit);
             }
-            else if (sortOption.Contains("Food Cost Percentage"))
+            else if (sortOption.Contains("Food Cost %")) // FIXED: matches combo text
             {
                 recipes = DatabaseContext.GetRecipesByFoodCostPercentage(maxFoodCost);
             }
@@ -178,8 +203,8 @@ namespace CostChef
             // Filter by category
             if (filterCategory != "All Categories")
             {
-                recipes = recipes.Where(r => 
-                    r.Category != null && 
+                recipes = recipes.Where(r =>
+                    r.Category != null &&
                     r.Category.Equals(filterCategory, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
@@ -188,9 +213,20 @@ namespace CostChef
 
             // Populate the grid
             PopulateRecipeGrid(recipes);
-            
-            // Calculate and display summary
-            CalculateSummary(recipes);
+        }
+
+        private List<Recipe> SortRecipes(List<Recipe> recipes, string sortOption)
+        {
+            return sortOption switch
+            {
+                "Name (A-Z)" => recipes.OrderBy(r => r.Name).ToList(),
+                "Name (Z-A)" => recipes.OrderByDescending(r => r.Name).ToList(),
+                "Profit Margin (High to Low)" => recipes.OrderByDescending(r => r.ProfitMargin).ToList(),
+                "Profit Margin (Low to High)" => recipes.OrderBy(r => r.ProfitMargin).ToList(),
+                "Food Cost % (High to Low)" => recipes.OrderByDescending(r => r.ActualFoodCostPercentage).ToList(),
+                "Profit Amount" => recipes.OrderByDescending(r => r.ProfitPerServing).ToList(),
+                _ => recipes.OrderByDescending(r => r.ProfitMargin).ToList(),
+            };
         }
 
         private void PopulateRecipeGrid(List<Recipe> recipes)
@@ -215,20 +251,9 @@ namespace CostChef
             }
 
             dataGridViewRecipes.DataSource = gridData;
-        }
 
-        private List<Recipe> SortRecipes(List<Recipe> recipes, string sortOption)
-        {
-            return sortOption switch
-            {
-                "Name (A-Z)" => recipes.OrderBy(r => r.Name).ToList(),
-                "Name (Z-A)" => recipes.OrderByDescending(r => r.Name).ToList(),
-                "Profit Margin (High to Low)" => recipes.OrderByDescending(r => r.ProfitMargin).ToList(),
-                "Profit Margin (Low to High)" => recipes.OrderBy(r => r.ProfitMargin).ToList(),
-                "Food Cost % (High to Low)" => recipes.OrderByDescending(r => r.ActualFoodCostPercentage).ToList(),
-                "Profit Amount" => recipes.OrderByDescending(r => r.ProfitPerServing).ToList(),
-                _ => recipes.OrderByDescending(r => r.ProfitMargin).ToList(),
-            };
+            // Recalculate summary
+            CalculateSummary(recipes);
         }
 
         private void CalculateSummary(List<Recipe> recipes)
@@ -242,26 +267,30 @@ namespace CostChef
             var profitable = recipes.Count(r => r.ProfitPerServing > 0);
             var highFC = recipes.Count(r => r.ActualFoodCostPercentage > r.TargetFoodCostPercentage);
             var averageProfitMargin = recipes.Where(r => r.SalesPrice > 0).Average(r => r.ProfitMargin) * 100;
-            
+
             lblSummary.Text = $"Total Recipes: {recipes.Count} | Profitable: {profitable} | High Food Cost: {highFC} | Avg Profit Margin: {averageProfitMargin:F1}%";
         }
 
         private void btnOpenRecipe_Click(object sender, EventArgs e)
         {
-            if (dataGridViewRecipes.SelectedRows.Count > 0)
+            if (dataGridViewRecipes.SelectedRows.Count == 0)
             {
-                var selectedRow = dataGridViewRecipes.SelectedRows[0];
-                if (selectedRow.DataBoundItem is RecipeDisplayData displayData)
+                MessageBox.Show("Please select a recipe to open.", "No Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selectedRow = dataGridViewRecipes.SelectedRows[0];
+            if (selectedRow.DataBoundItem is RecipeDisplayData displayData)
+            {
+                // Load the full recipe using its ID
+                var recipe = DatabaseContext.GetRecipeById(displayData.RecipeId);
+                if (recipe != null)
                 {
-                    var recipe = DatabaseContext.GetRecipeById(displayData.RecipeId);
-                    if (recipe != null)
-                    {
-                        // Launch the main form with the selected recipe loaded
-                        var recipeForm = new RecipesForm();
-                        // NOTE: You need a public method on RecipesForm to load a specific recipe by ID
-                        // For example: recipeForm.LoadRecipeById(recipe.Id);
-                        recipeForm.ShowDialog();
-                    }
+                    var recipeForm = new RecipesForm();
+                    // TODO: Implement LoadRecipeById on RecipesForm and uncomment:
+                    // recipeForm.LoadRecipeById(recipe.Id);
+                    recipeForm.ShowDialog();
                 }
             }
         }
@@ -292,28 +321,32 @@ namespace CostChef
                             {
                                 if (row.IsNewRow) continue;
 
-                                var line = $"\"" + (row.Cells["RecipeName"].Value?.ToString() ?? "").Replace("\"", "\"\"") + "\"," +
-                                    "\"" + (row.Cells["Category"].Value?.ToString() ?? "").Replace("\"", "\"\"") + "\"," +
-                                    (row.Cells["TotalCost"].Value ?? "0") + "," +
-                                    (row.Cells["CostPerServing"].Value ?? "0") + "," +
-                                    (row.Cells["SalesPrice"].Value ?? "0") + "," +
-                                    (row.Cells["ProfitPerServing"].Value ?? "0") + "," +
-                                    (row.Cells["ProfitMargin"].Value ?? "0") + "," +
-                                    (row.Cells["FoodCostPercentage"].Value ?? "0") + "," +
-                                    "\"" + (row.Cells["Status"].Value?.ToString() ?? "").Replace("\"", "\"\"") + "\"";
+                                if (row.DataBoundItem is RecipeDisplayData data)
+                                {
+                                    var line =
+                                        "\"" + (data.RecipeName ?? string.Empty).Replace("\"", "\"\"") + "\"," +
+                                        "\"" + (data.Category ?? string.Empty).Replace("\"", "\"\"") + "\"," +
+                                        data.TotalCost + "," +
+                                        data.CostPerServing + "," +
+                                        data.SalesPrice + "," +
+                                        data.ProfitPerServing + "," +
+                                        data.ProfitMargin + "," +
+                                        data.FoodCostPercentage + "," +
+                                        "\"" + (data.Status ?? string.Empty).Replace("\"", "\"\"") + "\"";
 
-                                writer.WriteLine(line);
+                                    writer.WriteLine(line);
+                                }
                             }
                         }
 
-                        MessageBox.Show("Recipe profitability data exported to " + saveDialog.FileName, "Export Successful", 
+                        MessageBox.Show("Recipe profitability data exported to " + saveDialog.FileName, "Export Successful",
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error exporting data: " + ex.Message, "Error", 
+                MessageBox.Show("Error exporting data: " + ex.Message, "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -323,4 +356,6 @@ namespace CostChef
             this.Close();
         }
     }
+
+
 }

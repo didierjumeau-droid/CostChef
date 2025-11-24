@@ -99,6 +99,20 @@ namespace CostChef
             if (dataGridViewIngredients.Columns.Contains("SupplierId"))
                 dataGridViewIngredients.Columns["SupplierId"].Visible = false;
 
+            // NEW: align Unit & UnitPrice to the right
+            if (dataGridViewIngredients.Columns.Contains("Unit"))
+            {
+                dataGridViewIngredients.Columns["Unit"].DefaultCellStyle.Alignment =
+                    DataGridViewContentAlignment.MiddleRight;
+            }
+
+            if (dataGridViewIngredients.Columns.Contains("UnitPrice"))
+            {
+                var col = dataGridViewIngredients.Columns["UnitPrice"];
+                col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                col.DefaultCellStyle.Format = "N2"; // 2 decimals, no extra dependencies
+            }
+
             lblSummary.Text = $"Total Ingredients: {ingredients.Count}";
         }
 
